@@ -1,0 +1,26 @@
+{
+  "name": "mcp-todo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A local task manager with a web interface and MCP server",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,vite -c cyan,magenta \"MCP_TODO_MCP=0 node src/index.js\" \"vite --host 127.0.0.1\"",
+    "build": "vite build",
+    "start": "npm run build && node src/index.js",
+    "test:smoke": "npm run build && node scripts/smoke-test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "concurrently": "^10.0.6",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.5"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#f2f5f3" />
+    <title>My ToDo</title>
+    <script>
+      try {
+        if (localStorage.getItem("todo-theme") === "dark")
+          document.documentElement.classList.add("dark");
+        const accent = localStorage.getItem("todo-accent");
+        if (accent) document.documentElement.dataset.accent = accent;
+        const language = localStorage.getItem("todo-language");
+        if (language) document.documentElement.lang = language;
+      } catch {}
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header
+      class="mb-4 flex flex-wrap items-center justify-between border-b border-line pb-3 sm:mb-5 md:mb-6 md:pb-4"
+    >
+      <div class="flex items-center gap-3">
+        <span
+          class="flex h-9 w-9 items-center justify-center rounded-lg bg-action text-white"
+          aria-hidden="true"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="h-[18px] w-[18px]"
+          >
+            <path d="M8 6h13M8 12h13M8 18h13"></path>
+            <path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"></path>
+          </svg>
+        </span>
+        <div>
+          <h1 class="text-[22px] leading-tight" data-i18n="appTitle">
+            My Tasks
+          </h1>
+          <p id="todayLabel" class="mt-0.5 text-xs text-muted"></p>
+        </div>
+      </div>
+      <div class="ml-auto flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+        <label class="language-picker order-2 sm:order-none"
+          ><span class="sr-only" data-i18n="language">Language</span
+          ><select
+            id="languageSelect"
+            class="mt-0 h-8 w-[152px] px-2 py-1 text-xs"
+            aria-label="Language"
+            data-i18n-aria="language"
+          >
+            <option value="en">English</option>
+            <option value="es">Español</option>
+            <option value="ja">日本語</option>
+            <option value="pt">Português (Brasil)</option>
+            <option value="zh">简体中文</option>
+            <option value="ru">Русский</option>
+            <option value="fr">Français</option>
+            <option value="ko">한국어</option>
+            <option value="de">Deutsch</option>
+          </select></label
+        >
+        <div class="order-1 flex items-center gap-2 sm:order-none">
+        <div class="accent-picker" id="accentPicker">
+          <button
+            id="accentPickerToggle"
+            class="accent-picker-trigger"
+            type="button"
+            aria-label="Accent color: Green"
+            aria-expanded="false"
+            aria-controls="accentPalette"
+            title="Accent color"
+          >
+            <span
+              class="accent-color-dot"
+              data-color="green"
+              aria-hidden="true"
+            ></span>
+          </button>
+          <div
+            id="accentPalette"
+            class="accent-picker-popover"
+            role="group"
+            aria-label="Accent color"
+            hidden
+          >
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="red"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="red"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="orange"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="orange"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="yellow"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="yellow"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="green"
+              aria-label="Select accent color"
+              aria-pressed="true"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="green"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="emerald"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="emerald"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="teal"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="teal"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="sky"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="sky"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="blue"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="blue"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="indigo"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="indigo"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="purple"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="purple"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="pink"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="pink"
+                aria-hidden="true"
+              ></span>
+            </button>
+            <button
+              class="accent-picker-option"
+              type="button"
+              data-accent-choice="neutral"
+              aria-label="Select accent color"
+              aria-pressed="false"
+            >
+              <span
+                class="accent-color-dot"
+                data-color="neutral"
+                aria-hidden="true"
+              ></span>
+            </button>
+          </div>
+        </div>
+        <button
+          id="themeToggle"
+          type="button"
+          role="switch"
+          aria-checked="false"
+          class="theme-switch"
+          aria-label="Dark theme"
+        >
+          <svg
+            class="theme-switch-icon theme-moon"
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"></path>
+          </svg>
+          <svg
+            class="theme-switch-icon theme-sun"
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <circle cx="12" cy="12" r="4"></circle>
+            <path
+              d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l-1.42-1.42m11.3-11.3 1.42 1.42"
+            ></path>
+          </svg>
+          <span class="theme-switch-knob" aria-hidden="true"></span>
+        </button>
+        </div>
+      </div>
+    </header>
+
+    <main
+      class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px] md:gap-x-5 md:gap-y-0"
+    >
+      <div class="col-span-full flex min-h-12 items-center gap-1 sm:gap-2">
+        <button
+          class="inline-flex items-center gap-2 rounded-md bg-accent-soft px-3 py-2 text-[13px] font-semibold text-accent"
+          data-view="tasks"
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M6 3.5h7M6 8h7M6 12.5h7"></path><path d="m2.5 3.5.7.7 1.2-1.4M2.5 8l.7.7 1.2-1.4M2.5 12.5l.7.7 1.2-1.4"></path></svg>
+          <span data-i18n="tasks">Tasks</span>
+        </button>
+        <button
+          class="inline-flex items-center gap-2 rounded-md bg-transparent px-3 py-2 text-[13px] font-semibold text-muted hover:bg-tint hover:text-ink"
+          data-view="plan"
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><rect x="2.25" y="3.5" width="11.5" height="10.25" rx="1.5"></rect><path d="M5 2v3M11 2v3M2.5 6.5h11"></path></svg>
+          <span data-i18n="dayPlan">Day plan</span>
+        </button>
+        <button
+          id="refresh"
+          type="button"
+          title="Refresh"
+          aria-label="Refresh current view"
+          data-i18n-title="refresh"
+          data-i18n-aria="refreshCurrent"
+          class="ml-auto my-auto inline-flex h-9 w-9 items-center justify-center rounded-md text-muted hover:bg-tint hover:text-accent"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="h-[18px] w-[18px]"
+          >
+            <path d="M20 7v5h-5"></path>
+            <path d="M19 12a7 7 0 1 1-2.05-4.95L20 10"></path>
+          </svg>
+        </button>
+        <button
+          id="newTask"
+          type="button"
+          aria-label="New task"
+          data-i18n-aria="newTask"
+          class="my-auto inline-flex h-9 items-center gap-2 rounded-md border border-transparent bg-action px-3 text-[13px] font-semibold text-white hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-accent/30"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            class="h-4 w-4"
+          >
+            <path d="M12 5v14M5 12h14"></path></svg
+          ><span class="new-task-label" data-i18n="new">New</span>
+        </button>
+      </div>
+
+      <div class="col-span-full flex min-h-12 items-center justify-between gap-3 py-1 md:h-12 md:py-0">
+        <div
+          id="taskToolbar"
+          class="flex w-full flex-wrap items-center justify-between gap-2 md:flex-nowrap md:gap-3"
+        >
+          <div id="statusRow" class="w-full border-b border-line">
+            <div
+              id="statusSwitch"
+              role="group"
+              aria-label="Filter by status"
+              data-i18n-aria="statusFilter"
+              class="inline-flex w-full flex-nowrap justify-start gap-1.5 overflow-x-auto overscroll-x-contain bg-transparent p-0 sm:w-auto"
+            >
+              <button
+                type="button"
+                data-status-view="open"
+                aria-pressed="true"
+                class="status-option"
+                data-i18n="open"
+              >
+                Open
+              </button>
+              <button
+                type="button"
+                data-status-view="deferred"
+                aria-pressed="false"
+                class="status-option"
+                data-i18n="deferred"
+              >
+                Deferred
+              </button>
+              <button
+                type="button"
+                data-status-view="done"
+                aria-pressed="false"
+                class="status-option"
+                data-i18n="done"
+              >
+                Completed
+              </button>
+              <button
+                type="button"
+                data-status-view="all"
+                aria-pressed="false"
+                class="status-option"
+                data-i18n="all"
+              >
+                All
+              </button>
+            </div>
+          </div>
+          <label
+            class="hidden"
+            aria-label="Filter by tag"
+            data-i18n-aria="projectFilter"
+            ><select id="scopeFilter" class="mt-0 h-10 px-2 py-1 text-xs">
+              <option value="all" data-i18n="allTasks">All tasks</option>
+              <option value="untagged" data-i18n="noProject">
+                No tags
+              </option>
+            </select></label
+          >
+        </div>
+        <div
+          id="planToolbar"
+          hidden
+          class="flex w-full flex-col items-stretch gap-1.5"
+        >
+          <div class="w-full border-b border-line">
+            <div
+              id="planDateSwitch"
+              class="inline-flex w-full flex-nowrap justify-start gap-1.5 overflow-x-auto overscroll-x-contain bg-transparent p-0 sm:w-auto"
+              role="group"
+              aria-label="Choose plan day"
+              data-i18n-aria="choosePlanDay"
+            ></div>
+          </div>
+        </div>
+      </div>
+
+      <section class="min-w-0">
+        <div id="taskView">
+          <div
+            class="flex flex-wrap items-center gap-2 rounded-t-md border border-b-0 border-line bg-tint px-3 py-3"
+          >
+            <label
+              class="relative min-w-[92px] flex-1 sm:min-w-[160px]"
+              aria-label="Search tasks"
+              data-i18n-aria="searchLabel"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+              >
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="m20 20-4-4"></path>
+              </svg>
+              <input
+                id="searchInput"
+                type="search"
+                placeholder="Find a task"
+                data-i18n-placeholder="searchPlaceholder"
+                class="mt-0 h-9 rounded-lg border-line bg-surface pl-9 pr-3 py-2 text-xs placeholder:text-placeholder"
+              />
+            </label>
+            <input id="dueDate" type="hidden" />
+            <div id="dueDatePicker" class="due-date-picker relative w-[112px] shrink-0 sm:w-[150px]">
+              <button id="dueDateToggle" type="button" class="due-date-toggle" aria-label="Filter by due date" data-i18n-aria="dueFilter" aria-controls="dueDatePopup" aria-expanded="false">
+                <span id="dueDateLabel" class="min-w-0 truncate">Due date</span>
+                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"></rect><path d="M5 2v3M11 2v3M2.5 6.5h11"></path></svg>
+              </button>
+              <div id="dueDatePopup" class="due-date-popup" role="dialog" aria-label="Filter by due date" data-i18n-aria="dueFilter" hidden>
+                <div class="calendar-heading">
+                  <button type="button" class="calendar-month-button" data-due-calendar-shift="-1" aria-label="Previous month" data-i18n-aria="calendarPreviousMonth"><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"></path></svg></button>
+                  <h2 id="dueCalendarMonthLabel"></h2>
+                  <button type="button" class="calendar-month-button" data-due-calendar-shift="1" aria-label="Next month" data-i18n-aria="calendarNextMonth"><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"></path></svg></button>
+                </div>
+                <div id="dueCalendarGrid" class="calendar-grid" role="group" aria-label="Filter by due date" data-i18n-aria="dueFilter"></div>
+                <div class="due-date-actions">
+                  <button id="dueDateToday" type="button" data-i18n="today">Today</button>
+                  <button id="dueDateClear" type="button" data-i18n="clearDate">Clear</button>
+                </div>
+              </div>
+            </div>
+            <div id="mobileTagPicker" class="mobile-tag-picker relative md:hidden">
+              <button id="mobileTagToggle" type="button" class="mobile-tag-toggle" aria-label="Task tags" data-i18n-aria="projectLists" aria-controls="mobileTagPopup" aria-expanded="false">
+                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.2V3.5A1.5 1.5 0 0 1 3.5 2h4.7l5.3 5.3a1.5 1.5 0 0 1 0 2.1l-3.1 3.1a1.5 1.5 0 0 1-2.1 0L2 8.2Z"></path><circle cx="5.2" cy="5.2" r=".7" fill="currentColor"></circle></svg>
+              </button>
+              <div id="mobileTagPopup" class="mobile-tag-popup" role="dialog" aria-label="Task tags" data-i18n-aria="projectLists" hidden>
+                <nav id="mobileTagMenu" class="flex flex-col gap-1"></nav>
+              </div>
+            </div>
+          </div>
+          <div
+            id="tasks"
+            class="overflow-hidden rounded-b-md border-x border-b border-line bg-surface"
+          ></div>
+        </div>
+
+        <div id="planView" hidden>
+          <div
+            id="planDateControls"
+            class="relative flex min-h-[61px] items-center overflow-visible rounded-t-md border border-b-0 border-line bg-tint py-3 pl-4 pr-3"
+          >
+            <p class="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-sm font-semibold text-ink"><span class="shrink-0" data-i18n="plansFor">Plan for</span> <time id="planDateLabel" class="truncate"></time></p>
+            <input type="date" id="planDate" aria-hidden="true" tabindex="-1" hidden />
+            <div id="mobilePlanCalendarPicker" class="mobile-plan-calendar-picker relative md:hidden">
+              <button id="mobilePlanCalendarToggle" type="button" class="mobile-plan-calendar-toggle" aria-label="Plan date" data-i18n-aria="planDate" aria-controls="mobilePlanCalendarPopup" aria-expanded="false">
+                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5"></rect><path d="M5 2v3M11 2v3M2 6.5h12"></path></svg>
+              </button>
+              <div id="mobilePlanCalendarPopup" class="mobile-plan-calendar-popup" role="dialog" aria-label="Schedule calendar" data-i18n-aria="scheduleCalendar" hidden></div>
+            </div>
+          </div>
+          <div
+            id="planItems"
+            class="overflow-hidden rounded-b-md border-x border-b border-line bg-surface"
+          ></div>
+        </div>
+      </section>
+      <aside id="tagPanel" class="hidden md:block">
+        <section
+          class="rounded-md border border-line bg-surface p-3"
+        >
+          <nav
+            id="tagNavigation"
+            class="flex flex-col gap-1"
+            aria-label="Task tags"
+            data-i18n-aria="projectLists"
+          >
+            <button
+              id="allTasks"
+              class="scope-option is-active"
+              aria-current="page"
+            >
+              <span data-i18n="allTasks">All tasks</span>
+            </button>
+            <button
+              id="unassigned"
+              class="scope-option"
+            >
+              <span data-i18n="noProject">No tags</span>
+            </button>
+            <div class="my-2 border-t border-line"></div>
+            <div id="tags" class="flex flex-col gap-1"></div>
+          </nav>
+          <div id="scheduleCalendarAnchor">
+            <div id="scheduleCalendar" hidden>
+              <div class="calendar-heading">
+                <button type="button" class="calendar-month-button" data-calendar-shift="-1" aria-label="Previous month" data-i18n-aria="calendarPreviousMonth"><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"></path></svg></button>
+                <h2 id="calendarMonthLabel"></h2>
+                <button type="button" class="calendar-month-button" data-calendar-shift="1" aria-label="Next month" data-i18n-aria="calendarNextMonth"><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"></path></svg></button>
+              </div>
+              <div id="calendarGrid" class="calendar-grid" role="group" aria-label="Schedule calendar" data-i18n-aria="scheduleCalendar"></div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <dialog id="taskDialog">
+      <form id="taskForm">
+        <div class="mb-5 flex items-center justify-between">
+          <h2 id="dialogTitle" data-i18n="newTask">New task</h2>
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-xl text-muted hover:bg-tint hover:text-ink"
+            id="closeDialog"
+            aria-label="Close"
+            data-i18n-aria="close"
+          >
+            ×
+          </button>
+        </div>
+        <input type="hidden" id="taskId" /><label
+          ><span data-i18n="taskName">Title</span
+          ><input id="title" required maxlength="300" autofocus /></label
+        ><label class="mt-3"
+          ><span data-i18n="description">Description</span
+          ><textarea id="description" class="description-input" rows="5"></textarea>
+        </label>
+        <div class="mt-3 grid grid-cols-2 gap-x-3">
+          <label class="col-span-2"
+            ><span data-i18n="project">Tags</span
+            ><input
+              id="taskTags"
+              list="tagOptions"
+              data-i18n-placeholder="projectPlaceholder"
+              autocomplete="off"
+            /><datalist id="tagOptions"></datalist></label
+          ><label class="mt-3"
+            ><span data-i18n="due">Due date</span
+            ><input id="taskDue" type="date" /></label
+          ><label class="mt-3"
+            ><span data-i18n="priority">Priority</span
+            ><select id="taskPriority">
+              <option value="normal" data-i18n="priorityNormal">Normal</option>
+              <option value="high" data-i18n="priorityHigh">High</option>
+              <option value="low" data-i18n="priorityLow">Low</option>
+            </select></label
+          >
+        </div>
+        <div class="mt-5 flex items-center justify-between">
+          <span id="formError" class="text-xs text-rose"></span
+          ><button
+            class="rounded-lg bg-action px-4 py-[10px] text-[13px] font-semibold text-white hover:bg-action-hover"
+            type="submit"
+            data-i18n="save"
+          >
+            Save
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <div
+      id="toast"
+      role="status"
+      class="fixed bottom-5 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 translate-y-3 items-center gap-4 rounded-lg border border-accent bg-surface px-4 py-3 text-[13px] font-medium text-ink opacity-0 shadow-lg transition duration-200"
+    >
+      <span id="toastMessage"></span>
+      <button id="toastAction" class="shrink-0 rounded-md border border-line px-2 py-1 text-xs font-semibold text-accent hover:bg-tint" type="button" hidden></button>
+    </div>
+    <script src="/src/app.js" type="module"></script>
+  </body>
+</html>
