@@ -22,21 +22,26 @@
       class="mb-4 flex flex-wrap items-center justify-between border-b border-line pb-3 sm:mb-5 md:mb-6 md:pb-4"
     >
       <div class="flex items-center gap-3">
-        <span
-          class="flex h-9 w-9 items-center justify-center rounded-lg bg-action text-white"
-          aria-hidden="true"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="h-[18px] w-[18px]"
-          >
-            <path d="M8 6h13M8 12h13M8 18h13"></path>
-            <path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"></path>
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center" aria-hidden="true">
+          <svg class="todo-icon h-9 w-9" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" stroke="var(--icon-accent, #1E3A8A)" stroke-width="12">
+            <title>Checklist calendar with pencil</title>
+            <rect x="48" y="112" width="400" height="352" rx="48" fill="#F8FAFF"/>
+            <path d="M48 160a48 48 0 0 1 48-48h304a48 48 0 0 1 48 48v56H48Z" fill="var(--icon-accent,#2563EB)"/>
+            <g fill="#e5e7eb"><rect x="128" y="56" width="48" height="120" rx="24"/><rect x="320" y="56" width="48" height="120" rx="24"/></g>
+            <g stroke="none">
+              <rect x="88" y="248" width="56" height="56" rx="14" fill="#22C55E"/>
+              <rect x="88" y="320" width="56" height="56" rx="14" fill="#3B82F6"/>
+              <path d="m102 276 11 11 18-23m-29 84 11 11 18-23" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M180 276h120m-120 72h88m-88 72h56" stroke="#94A3B8" stroke-width="24" stroke-linecap="round"/>
+              <rect x="88" y="392" width="56" height="56" rx="14" fill="#CBD5E1"/>
+            </g>
+            <g transform="rotate(36 358 318)" stroke="var(--icon-accent,#1E3A8A)" stroke-linejoin="round">
+              <path d="M326 216h64v184l-32 48-32-48Z" fill="#FBBF24"/>
+              <path d="M326 400h64l-32 48Z" fill="#FDE68A"/>
+              <path d="M346 430h24l-12 18Z" fill="var(--icon-accent, #1E3A8A)" stroke="none"/>
+              <path d="M326 184v-22a32 32 0 0 1 64 0v22Z" fill="#FB7185"/>
+              <path d="M326 184h64v32h-64Z" fill="#94A3B8"/>
+            </g>
           </svg>
         </span>
         <div>
@@ -47,14 +52,22 @@
         </div>
       </div>
       <div class="ml-auto flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-        <label class="language-picker order-2 sm:order-none"
-          ><span class="sr-only" data-i18n="language">Language</span
-          ><select
-            id="languageSelect"
-            class="mt-0 h-8 w-[152px] px-2 py-1 text-xs"
-            aria-label="Language"
-            data-i18n-aria="language"
+        <div class="language-picker order-2 sm:order-none" id="languagePicker">
+          <span class="sr-only" id="languageLabel" data-i18n="language">Language</span>
+          <button
+            id="languageSelectTrigger"
+            class="language-select-trigger"
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-controls="languageOptions"
+            aria-labelledby="languageLabel languageSelectValue"
           >
+            <span id="languageSelectValue">English</span>
+            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"></path></svg>
+          </button>
+          <div id="languageOptions" class="language-picker-menu" role="listbox" aria-labelledby="languageLabel" hidden></div>
+          <select id="languageSelect" class="sr-only" tabindex="-1" aria-hidden="true">
             <option value="en">English</option>
             <option value="es">Español</option>
             <option value="ja">日本語</option>
@@ -64,8 +77,9 @@
             <option value="fr">Français</option>
             <option value="ko">한국어</option>
             <option value="de">Deutsch</option>
-          </select></label
-        >
+            <option value="tr">Türkçe</option>
+          </select>
+        </div>
         <div class="order-1 flex items-center gap-2 sm:order-none">
         <div class="accent-picker" id="accentPicker">
           <button
@@ -383,6 +397,15 @@
               </button>
               <button
                 type="button"
+                data-status-view="overdue"
+                aria-pressed="false"
+                class="status-option"
+                data-i18n="overdueTasks"
+              >
+                Overdue
+              </button>
+              <button
+                type="button"
                 data-status-view="done"
                 aria-pressed="false"
                 class="status-option"
@@ -435,10 +458,9 @@
           <div
             class="flex flex-wrap items-center gap-2 rounded-t-md border border-b-0 border-line bg-tint px-3 py-3"
           >
-            <label
+            <div
+              id="searchInputContainer"
               class="relative min-w-[92px] flex-1 sm:min-w-[160px]"
-              aria-label="Search tasks"
-              data-i18n-aria="searchLabel"
             >
               <svg
                 aria-hidden="true"
@@ -455,18 +477,30 @@
               <input
                 id="searchInput"
                 type="search"
+                aria-label="Search tasks"
+                data-i18n-aria="searchLabel"
                 placeholder="Find a task"
                 data-i18n-placeholder="searchPlaceholder"
+                aria-controls="searchTagSuggestions"
+                aria-expanded="false"
                 class="mt-0 h-9 rounded-lg border-line bg-surface pl-9 pr-3 py-2 text-xs placeholder:text-placeholder"
               />
-            </label>
+              <div
+                id="searchTagSuggestions"
+                class="search-tag-suggestions"
+                role="listbox"
+                aria-label="Task tags"
+                data-i18n-aria="projectLists"
+                hidden
+              ></div>
+            </div>
             <input id="dueDate" type="hidden" />
             <div id="dueDatePicker" class="due-date-picker relative w-[112px] shrink-0 sm:w-[150px]">
               <button id="dueDateToggle" type="button" class="due-date-toggle" aria-label="Filter by due date" data-i18n-aria="dueFilter" aria-controls="dueDatePopup" aria-expanded="false">
-                <span id="dueDateLabel" class="min-w-0 truncate">Due date</span>
+                <span id="dueDateLabel" class="min-w-0 truncate" data-i18n="due">Due date</span>
                 <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"></rect><path d="M5 2v3M11 2v3M2.5 6.5h11"></path></svg>
               </button>
-              <div id="dueDatePopup" class="due-date-popup" role="dialog" aria-label="Filter by due date" data-i18n-aria="dueFilter" hidden>
+              <div id="dueDatePopup" class="popover-panel due-date-popup" role="dialog" aria-label="Filter by due date" data-i18n-aria="dueFilter" hidden>
                 <div class="calendar-heading">
                   <button type="button" class="calendar-month-button" data-due-calendar-shift="-1" aria-label="Previous month" data-i18n-aria="calendarPreviousMonth"><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m10 3-5 5 5 5"></path></svg></button>
                   <h2 id="dueCalendarMonthLabel"></h2>
@@ -483,7 +517,7 @@
               <button id="mobileTagToggle" type="button" class="mobile-tag-toggle" aria-label="Task tags" data-i18n-aria="projectLists" aria-controls="mobileTagPopup" aria-expanded="false">
                 <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.2V3.5A1.5 1.5 0 0 1 3.5 2h4.7l5.3 5.3a1.5 1.5 0 0 1 0 2.1l-3.1 3.1a1.5 1.5 0 0 1-2.1 0L2 8.2Z"></path><circle cx="5.2" cy="5.2" r=".7" fill="currentColor"></circle></svg>
               </button>
-              <div id="mobileTagPopup" class="mobile-tag-popup" role="dialog" aria-label="Task tags" data-i18n-aria="projectLists" hidden>
+              <div id="mobileTagPopup" class="popover-panel mobile-tag-popup" role="dialog" aria-label="Task tags" data-i18n-aria="projectLists" hidden>
                 <nav id="mobileTagMenu" class="flex flex-col gap-1"></nav>
               </div>
             </div>
@@ -492,6 +526,7 @@
             id="tasks"
             class="overflow-hidden rounded-b-md border-x border-b border-line bg-surface"
           ></div>
+          <button id="loadMoreTasks" type="button" class="mt-3 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm font-medium text-ink hover:bg-tint disabled:opacity-50" data-i18n="loadMoreTasks" hidden>Load more tasks</button>
         </div>
 
         <div id="planView" hidden>
@@ -505,13 +540,14 @@
               <button id="mobilePlanCalendarToggle" type="button" class="mobile-plan-calendar-toggle" aria-label="Plan date" data-i18n-aria="planDate" aria-controls="mobilePlanCalendarPopup" aria-expanded="false">
                 <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5"></rect><path d="M5 2v3M11 2v3M2 6.5h12"></path></svg>
               </button>
-              <div id="mobilePlanCalendarPopup" class="mobile-plan-calendar-popup" role="dialog" aria-label="Schedule calendar" data-i18n-aria="scheduleCalendar" hidden></div>
+              <div id="mobilePlanCalendarPopup" class="popover-panel mobile-plan-calendar-popup" role="dialog" aria-label="Schedule calendar" data-i18n-aria="scheduleCalendar" hidden></div>
             </div>
           </div>
           <div
             id="planItems"
             class="overflow-hidden rounded-b-md border-x border-b border-line bg-surface"
           ></div>
+          <button id="loadMorePlanTasks" type="button" class="mt-3 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm font-medium text-ink hover:bg-tint disabled:opacity-50" data-i18n="loadMoreTasks" hidden>Load more tasks</button>
         </div>
       </section>
       <aside id="tagPanel" class="hidden md:block">
@@ -575,26 +611,42 @@
           ><span data-i18n="description">Description</span
           ><textarea id="description" class="description-input" rows="5"></textarea>
         </label>
-        <div class="mt-3 grid grid-cols-2 gap-x-3">
-          <label class="col-span-2"
+        <div class="mt-3 grid grid-cols-1 gap-x-3 min-[480px]:grid-cols-3">
+          <label class="mt-3 min-[480px]:col-span-3"
             ><span data-i18n="project">Tags</span
-            ><input
-              id="taskTags"
-              list="tagOptions"
-              data-i18n-placeholder="projectPlaceholder"
-              autocomplete="off"
-            /><datalist id="tagOptions"></datalist></label
+            ><div class="task-tag-editor">
+              <div id="taskTagChips" class="task-tag-chips"></div>
+              <input
+                id="taskTags"
+                class="task-tag-entry"
+                type="text"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls="taskTagOptions"
+                aria-expanded="false"
+                data-i18n-placeholder="projectPlaceholder"
+                autocomplete="off"
+              />
+              <div
+                id="taskTagOptions"
+                class="task-tag-options"
+                role="listbox"
+                hidden
+              ></div>
+            </div></label
+          ><label class="mt-3"
+            ><span data-i18n="priority">Priority</span
+            ><select id="taskPriority">
+              <option value="low" data-i18n="priorityLow">Low</option>
+              <option value="normal" data-i18n="priorityNormal" selected>Normal</option>
+              <option value="high" data-i18n="priorityHigh">High</option>
+            </select></label
           ><label class="mt-3"
             ><span data-i18n="due">Due date</span
             ><input id="taskDue" type="date" /></label
           ><label class="mt-3"
-            ><span data-i18n="priority">Priority</span
-            ><select id="taskPriority">
-              <option value="normal" data-i18n="priorityNormal">Normal</option>
-              <option value="high" data-i18n="priorityHigh">High</option>
-              <option value="low" data-i18n="priorityLow">Low</option>
-            </select></label
-          >
+            ><span data-i18n="dueTime">Time</span
+            ><input id="taskDueTime" type="time" /></label>
         </div>
         <div class="mt-5 flex items-center justify-between">
           <span id="formError" class="text-xs text-rose"></span

@@ -1,4 +1,4 @@
-# mcp-todo
+# MCP-ToDo
 
 A personal task manager that runs locally. The Vite web interface and MCP server share the same business logic and SQLite database. Tasks can have multiple reusable tags. No account is required, and task data is not synchronized.
 
@@ -11,45 +11,42 @@ A personal task manager that runs locally. The Vite web interface and MCP server
 - To build the production bundle without starting the server, run `npm run build`.
 - To build the app and run the isolated web/API smoke test, run `npm run test:smoke`. It uses a temporary SQLite database.
 
-In development, Vite and the API start with one command. The MCP transport is disabled in this mode. An MCP client can launch `src/index.js` separately over stdio. Existing projects and sections are migrated to task tags when the server starts; their legacy fields remain available for compatibility.
+In development, Vite and the HTTP API start with one command. The MCP server runs as a separate stdio process from `src/mcp.js`. Both entry points use the same SQLite database and business logic from `src/store.js`. Existing projects and sections are migrated to task tags when either server starts.
 
 ## Configuration
 
 - `MCP_TODO_DB` sets the SQLite database path. The default is `~/.local/share/mcp-todo/tasks.sqlite`.
 - `MCP_TODO_PORT` sets the local web/API port. The default is `4178`.
-- `MCP_TODO_WEB=0` disables the web server.
-- `MCP_TODO_MCP=0` disables the MCP stdio server.
 
 The web server binds to `127.0.0.1`.
 
 ## Web interface
 
-The default interface language is English. The language picker also offers Russian, Spanish, French, German, Chinese, and Japanese. The selected language, theme, and accent color are saved in the browser. Task data is stored in SQLite and is not synchronized.
+The default interface language is English. The language picker also offers Russian, Spanish, French, German, Chinese, Japanese, Korean, Portuguese, and Turkish. The selected language, theme, and accent color are saved in the browser. Task data is stored in SQLite and is not synchronized.
 
 ## MCP client configuration
 
-Add the server to your local MCP client configuration, replacing `/path/to/mcp-todo` with the absolute path to this project:
+Add the server to your MCP client's configuration for local stdio servers. The configuration file and exact field names depend on the client; use its equivalent of `command`, `args`, and optional environment variables:
 
 ```json
 {
   "mcpServers": {
     "mcp-todo": {
       "command": "node",
-      "args": ["/path/to/mcp-todo/src/index.js"],
+      "args": ["/absolute/path/to/mcp-todo/src/mcp.js"],
       "env": {
-        "MCP_TODO_WEB": "0"
+        "MCP_TODO_DB": "/absolute/path/to/tasks.sqlite"
       }
     }
   }
 }
 ```
 
-Restart the MCP client after changing its configuration. The server exposes these tools:
+Replace the script path with the absolute path to this project. The `env` block is optional; omit it to use the default database location. Restart or reload the MCP client after updating its configuration. The server exposes these tools:
 
-- `create_task` — create a task with zero or more tags. New tags are created when needed. Legacy `project` and `section` fields remain accepted as tags.
+- `create_task` — create a task with zero or more tags. New tags are created automatically when needed.
 - `list_tasks` — list tasks; supports tags, status, due-date, overdue, and priority filters. A task must have all requested tags to match.
 - `get_tags` — list available tags, optionally with open-task counts.
-- `get_project_structure` — legacy compatibility tool for projects and sections.
 - `update_task` — update a task by its ID, including replacing its tags. Pass an empty `tags` array to remove all tags.
 - `update_task_status` — complete, defer, or reopen a task.
 - `get_day_plan` — generate a suggested plan for a selected date without modifying task data.

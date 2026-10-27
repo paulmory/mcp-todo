@@ -8,9 +8,9 @@
     "node": ">=22.5"
   },
   "scripts": {
-    "dev": "concurrently -k -n api,vite -c cyan,magenta \"MCP_TODO_MCP=0 node src/index.js\" \"vite --host 127.0.0.1\"",
+    "dev": "concurrently -k -n api,vite -c cyan,magenta \"node src/server.js\" \"vite --host 127.0.0.1\"",
     "build": "vite build",
-    "start": "npm run build && node src/index.js",
+    "start": "npm run build && node src/server.js",
     "test:smoke": "npm run build && node scripts/smoke-test.js"
   },
   "dependencies": {

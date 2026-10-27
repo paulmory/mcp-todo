@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const serverEntry = join(projectRoot, 'src', 'index.js');
+const serverEntry = join(projectRoot, 'src', 'server.js');
 const tempDirectory = await mkdtemp(join(tmpdir(), 'mcp-todo-smoke-'));
 const databasePath = join(tempDirectory, 'smoke.sqlite');
 
@@ -45,8 +45,6 @@ const child = spawn(process.execPath, [serverEntry], {
     ...process.env,
     MCP_TODO_DB: databasePath,
     MCP_TODO_PORT: String(port),
-    MCP_TODO_WEB: '1',
-    MCP_TODO_MCP: '0',
   },
   stdio: ['ignore', 'ignore', 'pipe'],
 });
@@ -70,7 +68,7 @@ try {
 
   const pageResponse = await fetch(`${baseUrl}/`);
   const html = await pageResponse.text();
-  assert(pageResponse.ok && html.includes('<title>My Tasks</title>'), 'The production web page did not load.');
+  assert(pageResponse.ok && html.includes('<title>My ToDo</title>'), 'The production web page did not load.');
 
   const initialStructure = await requestJson(baseUrl, '/api/structure?withCounts=true');
   assert(Array.isArray(initialStructure) && initialStructure.length === 0, 'The isolated smoke-test database should start without projects.');
@@ -89,8 +87,28 @@ try {
   });
   assert(created.id && created.title === 'Smoke test task', 'Task creation failed.');
 
+  const secondCreated = await requestJson(baseUrl, '/api/tasks', {
+    method: 'POST',
+    body: {
+      title: 'Second smoke test task',
+      dueDate,
+      priority: 'normal',
+    },
+  });
+  assert(secondCreated.id && secondCreated.title === 'Second smoke test task', 'Second task creation failed.');
+
   const openTasks = await requestJson(baseUrl, '/api/tasks?status=open&project=Smoke%20test%20project');
-  assert(openTasks.some((task) => task.id === created.id), 'The new task was not returned by the task list endpoint.');
+  assert(Array.isArray(openTasks) && openTasks.some((task) => task.id === created.id), 'The legacy task list response was not preserved.');
+
+  const firstPage = await requestJson(baseUrl, '/api/tasks?status=open&limit=1&offset=0');
+  const secondPage = await requestJson(baseUrl, '/api/tasks?status=open&limit=1&offset=1');
+  assert(firstPage.tasks.length === 1 && firstPage.hasMore && firstPage.nextOffset === 1, 'The first task page metadata is incorrect.');
+  assert(secondPage.tasks.length === 1 && secondPage.tasks[0].id !== firstPage.tasks[0].id && !secondPage.hasMore, 'Task pagination did not return distinct pages.');
+
+  const schedulePage = await requestJson(baseUrl, `/api/schedule?date=${dueDate}&limit=1&offset=0`);
+  assert(schedulePage.tasks.length === 1 && schedulePage.hasMore, 'Schedule task pagination failed.');
+  const calendarCounts = await requestJson(baseUrl, `/api/calendar-counts?from=${dueDate}&to=${dueDate}`);
+  assert(calendarCounts.some((item) => item.dueDate === dueDate && item.count === 2), 'Calendar task counts are incorrect.');
 
   const structure = await requestJson(baseUrl, '/api/structure?withCounts=true');
   const project = structure.find((item) => item.name === 'Smoke test project');
@@ -103,7 +121,7 @@ try {
   const completedTasks = await requestJson(baseUrl, '/api/tasks?status=done');
   assert(completedTasks.some((task) => task.id === created.id), 'Task status update failed.');
 
-  console.log('Smoke test passed: web page, task API, project structure, day plan, and status updates.');
+  console.log('Smoke test passed: web page, task API, task and schedule pagination, calendar counts, project structure, day plan, and status updates.');
 } finally {
   if (child.exitCode === null && child.signalCode === null) {
     child.kill('SIGINT');

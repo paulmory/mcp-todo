@@ -1,4 +1,10 @@
 import { locales, translate } from "./i18n.js";
+import {
+  escapeHtml as esc,
+  isOverdue,
+  renderEmptyState,
+  renderTaskRow,
+} from "./components.js";
 
 const $ = (selector) => document.querySelector(selector);
 const savedLanguage = (() => {
@@ -17,10 +23,25 @@ const state = {
   status: "open",
   search: "",
   tasks: [],
+  tasksHasMore: false,
+  tasksOffset: 0,
+  planTasks: [],
+  planHasMore: false,
+  planOffset: 0,
   calendarMonth: null,
+  calendarCounts: new Map(),
+  calendarCountsMonth: null,
   dueCalendarMonth: null,
 };
 let availableTags = [];
+let availableTagsLoaded = false;
+let availableTagsPromise = null;
+let availableTagsGeneration = 0;
+let viewLoadGeneration = 0;
+let calendarLoadGeneration = 0;
+let tasksPageLoading = false;
+let planPageLoading = false;
+let selectedTaskTags = [];
 
 const today = () => new Date().toLocaleDateString("en-CA");
 const todayDate = new Date();
@@ -33,6 +54,60 @@ function renderTodayLabel() {
   $("#todayLabel").textContent =
     todayText.charAt(0).toLocaleUpperCase(locales[language]) +
     todayText.slice(1);
+}
+function syncLanguagePicker() {
+  const select = $("#languageSelect");
+  if (!select) return;
+  select.value = language;
+  const optionsList = $("#languageOptions");
+  if (!optionsList.childElementCount) {
+    [...select.options].forEach(({ value, textContent }) => {
+      const option = document.createElement("button");
+      option.type = "button";
+      option.className = "language-picker-option";
+      option.setAttribute("role", "option");
+      option.dataset.language = value;
+      option.textContent = textContent;
+      optionsList.append(option);
+    });
+  }
+  $("#languageSelectValue").textContent =
+    select.selectedOptions[0]?.textContent || "English";
+  optionsList.querySelectorAll('[role="option"]').forEach((option) => {
+    const selected = option.dataset.language === language;
+    option.setAttribute("aria-selected", String(selected));
+    option.tabIndex = selected ? 0 : -1;
+  });
+}
+function closeLanguagePicker({ restoreFocus = false } = {}) {
+  const options = $("#languageOptions");
+  if (!options || options.hidden) return;
+  options.hidden = true;
+  $("#languageSelectTrigger").setAttribute("aria-expanded", "false");
+  if (restoreFocus) $("#languageSelectTrigger").focus();
+}
+function openLanguagePicker(index = null) {
+  const options = $("#languageOptions");
+  options.hidden = false;
+  $("#languageSelectTrigger").setAttribute("aria-expanded", "true");
+  const buttons = [...options.querySelectorAll('[role="option"]')];
+  const selectedIndex = buttons.findIndex((option) => option.dataset.language === language);
+  const targetIndex = index ?? Math.max(0, selectedIndex);
+  buttons.forEach((option, optionIndex) => {
+    option.tabIndex = optionIndex === targetIndex ? 0 : -1;
+  });
+  buttons[targetIndex]?.focus();
+}
+function moveLanguageOption(delta) {
+  const options = [...$("#languageOptions").querySelectorAll('[role="option"]')];
+  const currentIndex = options.indexOf(document.activeElement);
+  const nextIndex = currentIndex < 0
+    ? 0
+    : (currentIndex + delta + options.length) % options.length;
+  options.forEach((option, index) => {
+    option.tabIndex = index === nextIndex ? 0 : -1;
+  });
+  options[nextIndex]?.focus();
 }
 function applyStaticTranslations() {
   document.documentElement.lang = language;
@@ -61,8 +136,9 @@ function applyStaticTranslations() {
     .setAttribute("aria-label", t("accentColor"));
   $("#accentPickerToggle").setAttribute("aria-label", t("accentColor"));
   $("#accentPickerToggle").setAttribute("title", t("accentColor"));
-  $("#languageSelect").value = language;
+  syncLanguagePicker();
   updateTagOptions();
+  updateDueDateLabel();
   renderTodayLabel();
 }
 applyStaticTranslations();
@@ -170,20 +246,6 @@ async function api(path, options = {}) {
   return data;
 }
 
-function esc(value = "") {
-  return String(value).replace(
-    /[&<>"']/g,
-    (character) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;",
-      })[character],
-  );
-}
-
 let toastTimer;
 function toast(message, action = null, duration = 5000) {
   const element = $("#toast");
@@ -209,8 +271,16 @@ function toast(message, action = null, duration = 5000) {
   }, duration);
 }
 
-function formatDate(date, showOverdue = true) {
+function formatDate(date, showOverdue = true, dueTime = null) {
   if (!date) return "";
+  if (showOverdue && isOverdue(date, dueTime)) {
+    const localDate = new Date(`${date}T00:00:00`);
+    const shortDate = new Intl.DateTimeFormat(locales[language], {
+      day: "numeric",
+      month: "short",
+    }).format(localDate);
+    return t("overdue", { date: shortDate });
+  }
   if (date === today()) return t("today");
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -220,30 +290,7 @@ function formatDate(date, showOverdue = true) {
     day: "numeric",
     month: "short",
   }).format(localDate);
-  return showOverdue && date < today()
-    ? t("overdue", { date: shortDate })
-    : shortDate;
-}
-
-function dateClass(date, showOverdue = true) {
-  if (showOverdue && date && date < today()) return "bg-rose-soft text-rose";
-  if (date === today()) return "bg-accent-soft text-accent";
-  return "bg-tint text-muted";
-}
-
-function priorityIcon(level) {
-  const labels = {
-    high: t("priorityHigh"),
-    normal: t("priorityNormal"),
-    low: t("priorityLow"),
-  };
-  const color = "text-muted";
-  const bars = [
-    '<rect x="2" y="10" width="3" height="4" rx="1" class="fill-current"></rect>',
-    `<rect x="6.5" y="7" width="3" height="7" rx="1" class="${level === "low" ? "fill-muted/20" : "fill-current"}"></rect>`,
-    `<rect x="11" y="4" width="3" height="10" rx="1" class="${level === "high" ? "fill-current" : "fill-muted/20"}"></rect>`,
-  ].join("");
-  return `<span class="inline-flex h-6 w-5 shrink-0 items-center justify-start rounded-md ${color}" role="img" aria-label="${esc(labels[level])}" title="${esc(labels[level])}"><svg aria-hidden="true" viewBox="0 0 16 16" class="-translate-y-px h-5 w-5">${bars}</svg></span>`;
+  return shortDate;
 }
 
 function dateValue(date) {
@@ -359,36 +406,63 @@ function renderCalendar({
     });
 }
 
-function renderScheduleCalendar(tasks = []) {
+function renderScheduleCalendar() {
   const selectedValue = $("#planDate").value;
   const [selectedYear, selectedMonth] = selectedValue.split("-").map(Number);
   if (!state.calendarMonth)
     state.calendarMonth = new Date(selectedYear, selectedMonth - 1, 1);
-  const taskCounts = new Map();
-  tasks.forEach((task) => {
-    if (task.dueDate)
-      taskCounts.set(task.dueDate, (taskCounts.get(task.dueDate) || 0) + 1);
-  });
   renderCalendar({
     calendar: $("#scheduleCalendar"),
     monthLabel: $("#calendarMonthLabel"),
     grid: $("#calendarGrid"),
     month: state.calendarMonth,
     selectedValue,
-    taskCounts,
+    taskCounts: state.calendarCounts,
     onSelect: (value) => {
       $("#planDate").value = value;
       loadPlan();
     },
     onMonthChange: (month) => {
       state.calendarMonth = month;
-      renderScheduleCalendar(tasks);
+      loadCalendarCounts(month);
     },
   });
 }
 
+function calendarMonthKey(month) {
+  return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
+}
+
+async function loadCalendarCounts(month = state.calendarMonth) {
+  if (!month) return;
+  const key = calendarMonthKey(month);
+  if (state.calendarCountsMonth === key) {
+    renderScheduleCalendar();
+    return;
+  }
+  const from = `${key}-01`;
+  const to = dateValue(new Date(month.getFullYear(), month.getMonth() + 1, 0));
+  const requestId = ++calendarLoadGeneration;
+  try {
+    const counts = await api(`/api/calendar-counts?from=${from}&to=${to}`);
+    if (requestId !== calendarLoadGeneration || calendarMonthKey(state.calendarMonth) !== key) return;
+    state.calendarCounts = new Map(counts.map(({ dueDate, count }) => [dueDate, count]));
+    state.calendarCountsMonth = key;
+    renderScheduleCalendar();
+  } catch (error) {
+    if (requestId === calendarLoadGeneration) {
+      state.calendarCounts = new Map();
+      state.calendarCountsMonth = null;
+      renderScheduleCalendar();
+      toast(language === "ru" ? error.message : t("requestFailed"));
+    }
+  }
+}
+
 function updateDueDateLabel() {
   const value = $("#dueDate")?.value;
+  const toggle = $("#dueDateToggle");
+  toggle.classList.toggle("is-empty", !value);
   $("#dueDateLabel").textContent = value
     ? new Intl.DateTimeFormat(locales[language], {
         day: "2-digit",
@@ -467,9 +541,129 @@ function scopeClass(active) {
 }
 
 function updateTagOptions() {
-  $("#tagOptions").innerHTML = availableTags
-    .map((tag) => `<option value="${esc(tag.name)}">`)
+  renderSearchTagSuggestions();
+  renderTaskTagEditor();
+}
+
+function searchTagContext(value = $("#searchInput").value) {
+  const match = /(^|\s)tag:(?:"((?:\\.|[^"])*)|([^\s]*))$/i.exec(value);
+  if (!match) return null;
+  const rawQuery = match[2] ?? match[3];
+  if (match[2] === undefined && rawQuery.startsWith('"') && rawQuery.endsWith('"'))
+    return null;
+  const query = normalizeSearchTag(rawQuery);
+  return {
+    start: match.index + match[1].length,
+    query: query.toLocaleLowerCase(locales[language]),
+  };
+}
+
+function normalizeSearchTag(value) {
+  let normalized = value.replace(/\\(.)/g, "$1");
+  try {
+    normalized = decodeURIComponent(normalized);
+  } catch {}
+  return normalized;
+}
+
+function formatSearchTag(value) {
+  const escaped = value.replace(/([\\"])/g, "\\$1");
+  return /[\s"]/.test(value) ? `"${escaped}"` : escaped;
+}
+
+function searchTagTerms(value) {
+  return [
+    ...value.matchAll(
+      /(?:^|\s)tag:"((?:\\.|[^"])*)"|(?:^|\s)tag:([^\s]+)/gi,
+    ),
+  ].map((match) => normalizeSearchTag(match[1] ?? match[2]));
+}
+
+function replaceSearchQualifier(value, qualifier, replacement) {
+  if (qualifier !== "tag") return value;
+  const query = value
+    .replace(/(^|\s)tag:(?:"(?:\\.|[^"])*"|[^\s]+)/gi, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  return [query, replacement].filter(Boolean).join(" ");
+}
+
+function updateStatusFilter(status) {
+  state.status = status;
+  renderStatusSwitch();
+}
+
+function applySearch(value = $("#searchInput").value) {
+  state.search = value.trim();
+  const tags = searchTagTerms(state.search);
+  if (tags.length) {
+    state.tag = tags.length === 1 ? tags[0] : null;
+    state.untagged = false;
+  } else {
+    state.tag = null;
+  }
+  renderStatusSwitch();
+  loadTasks();
+}
+
+function renderSearchTagSuggestions() {
+  const input = $("#searchInput");
+  const list = $("#searchTagSuggestions");
+  if (!input || !list) return;
+
+  const context = searchTagContext();
+  if (!context) {
+    list.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    list.replaceChildren();
+    return;
+  }
+
+
+  const existing = new Set(
+    [...input.value.matchAll(/(?:^|\s)tag:(?:"((?:\\.|[^"])*)"|([^\s]+))/gi)].map(
+      (match) =>
+        normalizeSearchTag(match[1] ?? match[2]).toLocaleLowerCase(
+          locales[language],
+        ),
+    ),
+  );
+  const suggestions = availableTags.filter((tag) => {
+    const name = tag.name.toLocaleLowerCase(locales[language]);
+    return (
+      !existing.has(name) &&
+      name.startsWith(context.query)
+    );
+  });
+
+  if (!suggestions.length) {
+    list.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    list.replaceChildren();
+    return;
+  }
+
+  list.innerHTML = suggestions
+    .map(
+      (tag) => `
+        <button class="search-tag-option" type="button" role="option" aria-selected="false" data-search-tag="${esc(tag.name)}">
+          <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.2V3.5A1.5 1.5 0 0 1 3.5 2h4.7l5.3 5.3a1.5 1.5 0 0 1 0 2.1l-3.1 3.1a1.5 1.5 0 0 1-2.1 0L2 8.2Z"></path><circle cx="5.2" cy="5.2" r=".7" fill="currentColor"></circle></svg>
+          <span class="min-w-0 flex-1 truncate">${esc(tag.name)}</span>
+          <span class="search-tag-count">${tag.openTasks}</span>
+        </button>`,
+    )
     .join("");
+  list.hidden = false;
+  input.setAttribute("aria-expanded", "true");
+  list.querySelectorAll("[data-search-tag]").forEach((button) => {
+    button.onpointerdown = (event) => event.preventDefault();
+    button.onclick = () => {
+      const name = button.dataset.searchTag;
+      input.value = `${input.value.slice(0, context.start)}tag:${formatSearchTag(name)} `;
+      renderSearchTagSuggestions();
+      input.focus();
+    };
+  });
 }
 
 function parseTags(value) {
@@ -484,24 +678,109 @@ function parseTags(value) {
   ];
 }
 
+function renderTaskTagEditor() {
+  const input = $("#taskTags");
+  const chips = $("#taskTagChips");
+  const options = $("#taskTagOptions");
+  if (!input || !chips || !options) return;
+
+  input.placeholder = selectedTaskTags.length ? "" : t("projectPlaceholder");
+  chips.innerHTML = selectedTaskTags
+    .map(
+      (tag) => `
+        <span class="task-tag-chip">
+          <span>${esc(tag)}</span>
+          <button type="button" data-remove-task-tag="${esc(tag)}" aria-label="${esc(t("removeTag"))}: ${esc(tag)}">×</button>
+        </span>`,
+    )
+    .join("");
+  chips.querySelectorAll("[data-remove-task-tag]").forEach((button) => {
+    button.onclick = () => {
+      selectedTaskTags = selectedTaskTags.filter(
+        (tag) => tag !== button.dataset.removeTaskTag,
+      );
+      renderTaskTagEditor();
+      input.focus();
+    };
+  });
+
+  const query = input.value.trim().toLocaleLowerCase(locales[language]);
+  const selected = new Set(selectedTaskTags);
+  const matches = availableTags.filter((tag) => {
+    const name = tag.name.toLocaleLowerCase(locales[language]);
+    return !selected.has(name) && (!query || name.includes(query));
+  });
+  options.innerHTML = matches
+    .map(
+      (tag) => `
+        <button type="button" role="option" aria-selected="false" class="task-tag-option" data-task-tag-option="${esc(tag.name)}">
+          <span>${esc(tag.name)}</span>
+        </button>`,
+    )
+    .join("");
+  const showOptions = matches.length > 0 && document.activeElement === input;
+  options.hidden = !showOptions;
+  input.setAttribute("aria-expanded", String(showOptions));
+  options.querySelectorAll("[data-task-tag-option]").forEach((button, index, buttons) => {
+    button.onkeydown = (event) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        buttons[(index + 1) % buttons.length].focus();
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        if (index === 0) input.focus();
+        else buttons[index - 1].focus();
+      } else if (event.key === "Escape") {
+        options.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+        input.focus();
+      }
+    };
+    button.onpointerdown = (event) => event.preventDefault();
+    button.onclick = () => {
+      selectedTaskTags = parseTags(
+        [...selectedTaskTags, button.dataset.taskTagOption].join(","),
+      );
+      input.value = "";
+      renderTaskTagEditor();
+      input.focus();
+    };
+  });
+}
+
+function addTaskTagInput(value = $("#taskTags").value) {
+  selectedTaskTags = parseTags([...selectedTaskTags, ...parseTags(value)].join(","));
+  $("#taskTags").value = "";
+  renderTaskTagEditor();
+}
+
 function toggleTagFilter(tag) {
-  state.tag = state.tag === tag ? null : tag;
-  state.untagged = false;
+  const tagName = tag.toLocaleLowerCase(locales[language]);
+  const alreadySelected = searchTagTerms($("#searchInput").value).some(
+    (item) => item.toLocaleLowerCase(locales[language]) === tagName,
+  );
+  const selected = alreadySelected ? null : tag;
+  updateTagSearch(selected);
   loadTasks();
 }
 
-function renderTaskTags(tags = []) {
-  if (!tags.length) return "";
-  const buttons = tags
-    .map(
-      (tag) =>
-        `<button class="tag-link" type="button" data-filter-tag="${esc(tag)}" aria-label="${esc(t("projectFilter"))}: ${esc(tag)}" aria-pressed="${state.tag === tag}">${esc(tag)}</button>`,
-    )
-    .join("");
-  return `<div class="task-tag-list" role="group" aria-label="${esc(t("projectFilter"))}">
-    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0 text-muted"><path d="M2 8.2V3.5a1.5 1.5 0 0 1 1.5-1.5h4.7l5.3 5.3a1.5 1.5 0 0 1 0 2.1l-3.1 3.1a1.5 1.5 0 0 1-2.1 0L2 8.2Z"></path><circle cx="5.2" cy="5.2" r=".7" fill="currentColor"></circle></svg>
-    <span class="task-tag-items">${buttons}</span>
-  </div>`;
+function updateTagSearch(tag, value = $("#searchInput").value) {
+  const query = replaceSearchQualifier(
+    value,
+    "tag",
+    tag ? "tag:" + formatSearchTag(tag) : "",
+  );
+  state.tag = tag;
+  state.untagged = false;
+  state.search = query;
+  $("#searchInput").value = query;
+}
+
+function removeTagSearch(value = $("#searchInput").value) {
+  const query = replaceSearchQualifier(value, "tag", "");
+  state.tag = null;
+  state.search = query;
+  $("#searchInput").value = query;
 }
 
 function closeMobileTagPopup({ restoreFocus = false } = {}) {
@@ -533,8 +812,11 @@ function syncScheduleCalendarPlacement() {
 }
 
 function selectMobileTagScope(kind, tag = null) {
-  state.tag = kind === "tag" ? tag : null;
-  state.untagged = kind === "untagged";
+  if (kind === "tag") updateTagSearch(tag);
+  else {
+    removeTagSearch();
+    state.untagged = kind === "untagged";
+  }
   closeMobileTagPopup();
   loadTasks();
 }
@@ -576,8 +858,7 @@ function renderTags(tags) {
   `;
   document.querySelectorAll("[data-tag]").forEach((button) => {
     button.onclick = () => {
-      state.tag = button.dataset.tag;
-      state.untagged = false;
+      updateTagSearch(button.dataset.tag);
       loadTasks();
     };
   });
@@ -590,63 +871,110 @@ function renderTags(tags) {
   });
 }
 
-function emptyContent() {
-  const message = state.search ? t("emptySearch") : t("emptyTasks");
-  return `<div class="empty-state"><p class="empty-state-title">${message}</p><p class="empty-state-hint">${t("emptyHint")}</p></div>`;
+function taskComponentOptions(mode = "tasks", index = 0) {
+  return {
+    mode,
+    index,
+    labels: {
+      edit: t("editTaskAria"),
+      defer: t("deferTask"),
+      restore: t("restoreTask"),
+      restoreAria: t("restoreTaskAria"),
+      select: (title) => t("selectTask", { title }),
+      deferred: t("deferredBadge"),
+      tagFilter: t("projectFilter"),
+    },
+    priorityLabels: {
+      high: t("priorityHigh"),
+      normal: t("priorityNormal"),
+      low: t("priorityLow"),
+    },
+    formatDate,
+    currentDate: today(),
+    selectedTag: state.tag,
+  };
 }
 
-function taskCard(task) {
-  const selector =
-    task.status === "done"
-      ? `<button class="task-check-target task-done-control" type="button" title="${esc(t("restoreTask"))}" aria-label="${esc(t("restoreTaskAria"))}" data-status="open" data-id="${task.id}"><span class="task-done-indicator" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-2.5 w-2.5"><path d="m3 8 3 3 7-7"></path></svg></span></button>`
-      : `<button class="task-check-target task-open-control" type="button" title="${esc(t("selectTask", { title: task.title }))}" aria-label="${esc(t("selectTask", { title: task.title }))}" data-status="done" data-id="${task.id}"><span class="task-checkbox-indicator" aria-hidden="true"></span></button>`;
-  const actions = `<div class="task-actions">
-    <button class="icon-button" type="button" title="${t("editTaskAria")}" aria-label="${t("editTaskAria")}" data-edit="${task.id}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"></path></svg></button>
-    ${task.status === "done" ? "" : `<button class="icon-button" type="button" title="${t("deferTask")}" aria-label="${t("deferTask")}" data-status="deferred" data-id="${task.id}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></button>`}
-  </div>`;
-  const tagLabels = renderTaskTags(task.tags);
-  return `<article class="task-row group grid grid-cols-[40px_minmax(0,1fr)] items-start gap-2 border-b border-line/60 px-2 py-2 hover:bg-tint last:border-b-0">
-    ${selector}
-    <div class="task-row-main grid min-w-0 grid-cols-[minmax(0,1fr)_44px] gap-x-2 pt-1">
-      <div class="min-w-0">
-        <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-          <button type="button" class="min-w-0 break-words text-left text-[14px] leading-5 font-semibold ${task.status === "done" ? "text-muted line-through" : "text-ink hover:text-accent"}" data-edit="${task.id}" aria-label="${esc(t("editTaskAria"))}: ${esc(task.title)}">${esc(task.title)}</button>
-          ${task.status === "deferred" ? `<span class="text-[11px] font-medium text-muted">${t("deferredBadge")}</span>` : ""}
-        </div>
-        <div class="mt-1 flex min-w-0 flex-nowrap items-center gap-1.5">
-          ${priorityIcon(task.priority)}
-          ${task.dueDate ? `<span class="rounded-md px-2 py-1 text-[11px] font-medium ${dateClass(task.dueDate, task.status !== "done")}">${formatDate(task.dueDate, task.status !== "done")}</span>` : ""}
-          ${tagLabels}
-        </div>
-        ${task.description ? `<p class="mt-1 whitespace-pre-wrap text-[13px] leading-5 text-muted">${esc(task.description)}</p>` : ""}
-      </div>
-      ${actions}
-    </div>
-  </article>`;
+function emptyTaskContent() {
+  return renderEmptyState(
+    t(
+      state.search.trim()
+        ? "emptySearch"
+        : "emptyTasks",
+    ),
+    t("emptyHint"),
+  );
+}
+
+function renderTasks() {
+  const tasks = visibleTasks();
+  const options = taskComponentOptions();
+  $("#tasks").innerHTML = tasks.length
+    ? tasks.map((task) => renderTaskRow(task, options)).join("")
+    : emptyTaskContent();
+  $("#loadMoreTasks").hidden = !state.tasksHasMore;
+  $("#loadMoreTasks").disabled = tasksPageLoading;
 }
 
 function visibleTasks() {
   const query = state.search.trim().toLocaleLowerCase(locales[language]);
   if (!query) return state.tasks;
-  const terms = query.split(/\s+/).filter(Boolean);
+  const terms = [];
+  const tagTerms = [];
+  const textQuery = query
+    .replace(/(^|\s)tag:"((?:\\.|[^"])*)"|(^|\s)tag:([^\s]+)/gi, (_, beforeQuoted, quoted, beforeBare, bare) => {
+      const rawTag = quoted ?? bare;
+      if (rawTag) tagTerms.push(normalizeSearchTag(rawTag));
+      return `${beforeQuoted ?? beforeBare} `;
+    })
+    .replace(/(^|\s)tag:"(?:\\.|[^"])*$/i, " ")
+    .replace(/(^|\s)tag:[^\s]*$/i, " ");
+  textQuery.split(/\s+/).filter(Boolean).forEach((term) => terms.push(term));
   return state.tasks.filter((task) => {
-    const content = [task.title, task.description, ...(task.tags || [])]
+    const tags = (task.tags || []).map((tag) =>
+      tag.toLocaleLowerCase(locales[language]),
+    );
+    const content = [task.title, task.description, ...tags]
       .filter(Boolean)
       .join(" ")
       .toLocaleLowerCase(locales[language]);
-    return terms.every((term) => content.includes(term));
+    return (
+      terms.every((term) => content.includes(term)) &&
+      tagTerms.every((term) => tags.some((tag) => tag.includes(term)))
+    );
   });
 }
 
-function renderTasks() {
-  const tasks = visibleTasks();
-  $("#tasks").innerHTML = tasks.length
-    ? tasks.map(taskCard).join("")
-    : emptyContent();
-  wireCards();
+function invalidateAvailableTags() {
+  availableTagsGeneration += 1;
+  availableTagsLoaded = false;
+  availableTagsPromise = null;
 }
 
-async function loadTasks() {
+function loadAvailableTags() {
+  if (availableTagsLoaded) return Promise.resolve(availableTags);
+  if (!availableTagsPromise) {
+    const generation = availableTagsGeneration;
+    availableTagsPromise = api("/api/tags?withCounts=true")
+      .then((tags) => {
+        if (generation === availableTagsGeneration) {
+          availableTags = tags;
+          availableTagsLoaded = true;
+        }
+        return tags;
+      })
+      .finally(() => {
+        if (generation === availableTagsGeneration) {
+          availableTagsPromise = null;
+        }
+      });
+  }
+  return availableTagsPromise;
+}
+
+async function loadTasks({ refreshTags = false } = {}) {
+  const requestId = ++viewLoadGeneration;
+  if (refreshTags) invalidateAvailableTags();
   state.view = "tasks";
   $("#taskView").hidden = false;
   $("#planView").hidden = true;
@@ -660,63 +988,131 @@ async function loadTasks() {
   closeDueDatePopup();
   activeView("tasks");
   renderStatusSwitch();
-  const query = new URLSearchParams({ status: state.status });
+  state.tasksHasMore = false;
+  $("#loadMoreTasks").hidden = true;
+  const overdueOnly = state.status === "overdue";
+  const query = new URLSearchParams({
+    status: overdueOnly ? "all" : state.status,
+    limit: "100",
+    offset: "0",
+  });
+  if (overdueOnly) query.set("overdue", "true");
+  if (state.search.trim()) query.set("q", state.search.trim());
   if (state.tag) query.set("tag", state.tag);
   if (state.untagged) query.set("untagged", "true");
   if ($("#dueDate").value) query.set("dueDate", $("#dueDate").value);
-  const [tasks, tags] = await Promise.all([
-    api(`/api/tasks?${query}`),
-    api("/api/tags?withCounts=true"),
-  ]);
-  state.tasks = tasks;
+  let result;
+  let tags;
+  try {
+    [result, tags] = await Promise.all([
+      api(`/api/tasks?${query}`),
+      loadAvailableTags(),
+    ]);
+  } catch (error) {
+    if (requestId !== viewLoadGeneration) return;
+    throw error;
+  }
+  if (requestId !== viewLoadGeneration || state.view !== "tasks") return;
+  state.tasks = result.tasks;
+  state.tasksHasMore = result.hasMore;
+  state.tasksOffset = result.nextOffset;
   renderTasks();
   renderTags(tags);
 }
 
-function wireCards(tasks = state.tasks) {
-  document.querySelectorAll("[data-status]").forEach((button) => {
-    button.onclick = async () => {
-      const taskId = button.dataset.id;
-      const nextStatus = button.dataset.status;
-      try {
-        await api(`/api/tasks/${taskId}/status`, {
-          method: "POST",
-          body: JSON.stringify({ status: nextStatus }),
-        });
-        if (nextStatus === "done") {
-          toast(
-            t("taskCompleted"),
-            {
-              label: t("cancelAction"),
-              onClick: async () => {
-                try {
-                  await api(`/api/tasks/${taskId}/status`, {
-                    method: "POST",
-                    body: JSON.stringify({ status: "open" }),
-                  });
-                  if (state.view === "plan") await loadPlan();
-                  else await loadTasks();
-                  toast(t("statusUpdated"), null, 1500);
-                } catch (error) {
-                  toast(language === "ru" ? error.message : t("requestFailed"));
-                }
-              },
-            },
-            6000,
-          );
-        } else toast(t("statusUpdated"));
-        if (state.view === "plan") await loadPlan();
-        else await loadTasks();
-      } catch (error) {
-        toast(language === "ru" ? error.message : t("requestFailed"));
+function taskListQuery(offset) {
+  const query = new URLSearchParams({
+    status: state.status === "overdue" ? "all" : state.status,
+    limit: "100",
+    offset: String(offset),
+  });
+  if (state.status === "overdue") query.set("overdue", "true");
+  if (state.tag) query.set("tag", state.tag);
+  if (state.untagged) query.set("untagged", "true");
+  if ($("#dueDate").value) query.set("dueDate", $("#dueDate").value);
+  if (state.search.trim()) query.set("q", state.search.trim());
+  return query;
+}
+
+async function loadMoreTasks() {
+  if (tasksPageLoading || !state.tasksHasMore || state.view !== "tasks") return;
+  tasksPageLoading = true;
+  const requestId = viewLoadGeneration;
+  $("#loadMoreTasks").disabled = true;
+  try {
+    const result = await api(`/api/tasks?${taskListQuery(state.tasksOffset)}`);
+    if (requestId !== viewLoadGeneration || state.view !== "tasks") return;
+    const options = taskComponentOptions();
+    state.tasks = [...state.tasks, ...result.tasks];
+    state.tasksHasMore = result.hasMore;
+    state.tasksOffset = result.nextOffset;
+    $("#tasks").insertAdjacentHTML(
+      "beforeend",
+      result.tasks.map((task) => renderTaskRow(task, options)).join(""),
+    );
+    $("#loadMoreTasks").hidden = !state.tasksHasMore;
+  } catch (error) {
+    toast(language === "ru" ? error.message : t("requestFailed"));
+  } finally {
+    tasksPageLoading = false;
+    if (state.view === "tasks") $("#loadMoreTasks").disabled = false;
+  }
+}
+
+async function changeTaskStatus(taskId, nextStatus) {
+  try {
+    await api(`/api/tasks/${taskId}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status: nextStatus }),
+    });
+    invalidateAvailableTags();
+    if (nextStatus === "done") {
+      toast(
+        t("taskCompleted"),
+        {
+          label: t("cancelAction"),
+          onClick: async () => {
+            try {
+              await api(`/api/tasks/${taskId}/status`, {
+                method: "POST",
+                body: JSON.stringify({ status: "open" }),
+              });
+              invalidateAvailableTags();
+              if (state.view === "plan") await loadPlan();
+              else await loadTasks();
+              toast(t("statusUpdated"), null, 1500);
+            } catch (error) {
+              toast(language === "ru" ? error.message : t("requestFailed"));
+            }
+          },
+        },
+        6000,
+      );
+    } else toast(t("statusUpdated"));
+    if (state.view === "plan") await loadPlan();
+    else await loadTasks();
+  } catch (error) {
+    toast(language === "ru" ? error.message : t("requestFailed"));
+  }
+}
+
+function bindCardActions() {
+  [$("#tasks"), $("#planItems")].forEach((container) => {
+    container.addEventListener("click", (event) => {
+      const button = event.target.closest(
+        "button[data-status], button[data-edit], button[data-filter-tag]",
+      );
+      if (!button || !container.contains(button)) return;
+
+      if (button.dataset.status) {
+        changeTaskStatus(button.dataset.id, button.dataset.status);
+      } else if (button.dataset.edit) {
+        const tasks = container.id === "planItems" ? state.planTasks : state.tasks;
+        editTask(button.dataset.edit, tasks);
+      } else if (button.dataset.filterTag) {
+        toggleTagFilter(button.dataset.filterTag);
       }
-    };
-  });
-  document.querySelectorAll("[data-edit]").forEach((button) => {
-    button.onclick = () => editTask(button.dataset.edit, tasks);
-  });
-  document.querySelectorAll("[data-filter-tag]").forEach((button) => {
-    button.onclick = () => toggleTagFilter(button.dataset.filterTag);
+    });
   });
 }
 
@@ -732,10 +1128,13 @@ function openForm(task = null) {
   $("#taskId").value = task?.id || "";
   $("#dialogTitle").textContent = task ? t("editTaskTitle") : t("newTask");
   $("#title").value = task?.title || "";
-  $("#taskTags").value = (task?.tags || []).join(", ");
+  selectedTaskTags = parseTags((task?.tags || []).join(","));
+  $("#taskTags").value = "";
+  renderTaskTagEditor();
   $("#description").value = task?.description || "";
   resizeDescription();
   $("#taskDue").value = task?.dueDate || "";
+  $("#taskDueTime").value = task?.dueTime || "";
   $("#taskPriority").value = task?.priority || "normal";
   $("#taskDialog").showModal();
   $("#title").focus();
@@ -759,6 +1158,52 @@ function resizeDescription() {
   field.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
 }
 
+$("#taskTags").addEventListener("input", renderTaskTagEditor);
+$("#taskTags").addEventListener("focus", renderTaskTagEditor);
+$("#taskTags").addEventListener("blur", () => {
+  window.setTimeout(() => {
+    const input = $("#taskTags");
+    const options = $("#taskTagOptions");
+    if (
+      options &&
+      document.activeElement !== input &&
+      !options.contains(document.activeElement)
+    ) {
+      if (input.value.trim()) addTaskTagInput(input.value);
+      options.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+    }
+  }, 0);
+});
+$("#taskTags").addEventListener("keydown", (event) => {
+  if (event.key === "ArrowDown" && !$("#taskTagOptions").hidden) {
+    event.preventDefault();
+    $("#taskTagOptions [data-task-tag-option]")?.focus();
+  } else if (event.key === "Enter" || event.key === ",") {
+    event.preventDefault();
+    const value = $("#taskTags").value;
+    const exactMatch = availableTags.find(
+      (tag) =>
+        tag.name.toLocaleLowerCase(locales[language]) ===
+        value.trim().toLocaleLowerCase(locales[language]),
+    );
+    if (exactMatch) {
+      selectedTaskTags = parseTags(
+        [...selectedTaskTags, exactMatch.name].join(","),
+      );
+      $("#taskTags").value = "";
+      renderTaskTagEditor();
+    } else {
+      addTaskTagInput(value);
+    }
+  } else if (event.key === "Backspace" && !$("#taskTags").value && selectedTaskTags.length) {
+    selectedTaskTags = selectedTaskTags.slice(0, -1);
+    renderTaskTagEditor();
+  } else if (event.key === "Escape") {
+    $("#taskTagOptions").hidden = true;
+    $("#taskTags").setAttribute("aria-expanded", "false");
+  }
+});
 $("#description").addEventListener("input", resizeDescription);
 window.addEventListener("resize", resizeDescription);
 
@@ -768,15 +1213,19 @@ $("#taskForm").onsubmit = async (event) => {
     const id = $("#taskId").value;
     const body = {
       title: $("#title").value,
-      tags: parseTags($("#taskTags").value),
+      tags: parseTags(
+        [...selectedTaskTags, ...parseTags($("#taskTags").value)].join(","),
+      ),
       description: $("#description").value || null,
       dueDate: $("#taskDue").value || null,
+      dueTime: $("#taskDueTime").value || null,
       priority: $("#taskPriority").value,
     };
     await api(id ? `/api/tasks/${id}` : "/api/tasks", {
       method: "POST",
       body: JSON.stringify(body),
     });
+    invalidateAvailableTags();
     $("#taskDialog").close();
     toast(t("saved"));
     if (id && state.view === "plan") await loadPlan();
@@ -788,6 +1237,7 @@ $("#taskForm").onsubmit = async (event) => {
 };
 
 async function loadPlan() {
+  const requestId = ++viewLoadGeneration;
   closeMobileTagPopup();
   closeMobilePlanCalendarPopup();
   closeDueDatePopup();
@@ -801,72 +1251,155 @@ async function loadPlan() {
   $("#scheduleCalendar").hidden = false;
   $("#tagPanel").classList.add("force-visible");
   activeView("plan");
+  state.planHasMore = false;
+  $("#loadMorePlanTasks").hidden = true;
   renderPlanDateSwitch();
   renderPlanDateLabel();
   const selectedDate = $("#planDate").value;
   const [selectedYear, selectedMonth] = selectedDate.split("-").map(Number);
   state.calendarMonth = new Date(selectedYear, selectedMonth - 1, 1);
-  const allTasks = await api("/api/tasks?status=open");
-  const tasks = allTasks.filter((task) => task.dueDate === selectedDate);
-  renderScheduleCalendar(allTasks);
+  const includeBacklog = selectedDate === today();
+  const query = new URLSearchParams({
+    date: selectedDate,
+    includeBacklog: String(includeBacklog),
+    limit: "100",
+    offset: "0",
+  });
+  let result;
+  try {
+    [result] = await Promise.all([
+      api(`/api/schedule?${query}`),
+      loadCalendarCounts(state.calendarMonth),
+    ]);
+  } catch (error) {
+    if (requestId !== viewLoadGeneration) return;
+    throw error;
+  }
+  if (requestId !== viewLoadGeneration || state.view !== "plan") return;
+  const tasks = result.tasks;
+  state.planTasks = tasks;
+  state.planHasMore = result.hasMore;
+  state.planOffset = result.nextOffset;
+  renderScheduleCalendar();
+  const rowOptions = taskComponentOptions("plan");
   $("#planItems").innerHTML = tasks.length
     ? tasks
-        .map(
-          (task, index) => `
-    <article class="task-row group grid grid-cols-[40px_minmax(0,1fr)] items-start gap-2 border-b border-line/60 px-2 py-2 hover:bg-tint last:border-b-0">
-      <span class="pt-1 text-center text-base leading-5 font-semibold text-line">${index + 1}</span>
-      <div class="task-row-main grid min-w-0 grid-cols-[minmax(0,1fr)_44px] gap-x-2 pt-1">
-        <div class="min-w-0">
-          <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-            <button type="button" class="min-w-0 break-words text-left text-[14px] leading-5 font-semibold text-ink hover:text-accent" data-edit="${task.id}" aria-label="${esc(t("editTaskAria"))}: ${esc(task.title)}">${esc(task.title)}</button>
-          </div>
-          <div class="mt-1 flex flex-wrap items-center gap-1.5">
-            ${priorityIcon(task.priority)}
-            ${task.dueDate ? `<span class="rounded-md px-2 py-1 text-[11px] font-medium ${dateClass(task.dueDate)}">${formatDate(task.dueDate)}</span>` : ""}
-          </div>
-          ${task.description ? `<p class="mt-1 whitespace-pre-wrap text-[13px] leading-5 text-muted">${esc(task.description)}</p>` : ""}
-        </div>
-        <div class="task-actions">
-          <button class="icon-button" type="button" title="${t("editTaskAria")}" aria-label="${t("editTaskAria")}" data-edit="${task.id}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"></path></svg></button>
-        </div>
-      </div>
-    </article>`,
+        .map((task, index) =>
+          renderTaskRow(task, { ...rowOptions, index }),
         )
         .join("")
-    : `<div class="empty-state"><p class="empty-state-title">${t("planEmpty")}</p><p class="empty-state-hint">${t("planEmptyHint")}</p></div>`;
-  wireCards(tasks);
+    : renderEmptyState(t("planEmpty"), t("planEmptyHint"));
+  $("#loadMorePlanTasks").hidden = !state.planHasMore;
+  $("#loadMorePlanTasks").disabled = planPageLoading;
 }
+
+async function loadMorePlanTasks() {
+  if (planPageLoading || !state.planHasMore || state.view !== "plan") return;
+  planPageLoading = true;
+  $("#loadMorePlanTasks").disabled = true;
+  const requestId = viewLoadGeneration;
+  const query = new URLSearchParams({
+    date: $("#planDate").value,
+    includeBacklog: String($("#planDate").value === today()),
+    limit: "100",
+    offset: String(state.planOffset),
+  });
+  try {
+    const result = await api(`/api/schedule?${query}`);
+    if (requestId !== viewLoadGeneration || state.view !== "plan") return;
+    const startIndex = state.planTasks.length;
+    state.planTasks = [...state.planTasks, ...result.tasks];
+    state.planHasMore = result.hasMore;
+    state.planOffset = result.nextOffset;
+    const options = taskComponentOptions("plan");
+    $("#planItems").insertAdjacentHTML(
+      "beforeend",
+      result.tasks.map((task, index) => renderTaskRow(task, { ...options, index: startIndex + index })).join(""),
+    );
+    $("#loadMorePlanTasks").hidden = !state.planHasMore;
+  } catch (error) {
+    toast(language === "ru" ? error.message : t("requestFailed"));
+  } finally {
+    planPageLoading = false;
+    if (state.view === "plan") $("#loadMorePlanTasks").disabled = false;
+  }
+}
+
+$("#loadMoreTasks").onclick = loadMoreTasks;
+$("#loadMorePlanTasks").onclick = loadMorePlanTasks;
 
 $("#newTask").onclick = () => openForm();
 $("#closeDialog").onclick = () => $("#taskDialog").close();
 $("#refresh").onclick = () =>
-  state.view === "plan" ? loadPlan() : loadTasks();
+  state.view === "plan" ? loadPlan() : loadTasks({ refreshTags: true });
 $("#allTasks").onclick = () => {
-  state.tag = null;
+  removeTagSearch();
   state.untagged = false;
   loadTasks();
 };
 $("#unassigned").onclick = () => {
-  state.tag = null;
+  removeTagSearch();
   state.untagged = true;
   loadTasks();
 };
 $("#scopeFilter").onchange = () => {
   const [kind, tagName] = $("#scopeFilter").value.split(":");
   state.untagged = kind === "untagged";
-  state.tag = kind === "tag" ? decodeURIComponent(tagName) : null;
+  if (kind === "tag") updateTagSearch(decodeURIComponent(tagName));
+  else removeTagSearch();
+  state.untagged = kind === "untagged";
   loadTasks();
 };
 document.querySelectorAll("[data-status-view]").forEach((button) => {
   button.onclick = () => {
-    state.status = button.dataset.statusView;
-    renderStatusSwitch();
+    updateStatusFilter(button.dataset.statusView);
     loadTasks();
   };
 });
 $("#searchInput").oninput = () => {
-  state.search = $("#searchInput").value;
-  renderTasks();
+  renderSearchTagSuggestions();
+  if (!$("#searchInput").value.trim() && state.search) applySearch("");
+};
+$("#searchInput").onkeydown = (event) => {
+  if (event.key === "ArrowDown" && !$("#searchTagSuggestions").hidden) {
+    event.preventDefault();
+    $("#searchTagSuggestions [data-search-tag]")?.focus();
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    $("#searchTagSuggestions").hidden = true;
+    $("#searchInput").setAttribute("aria-expanded", "false");
+    applySearch();
+  } else if (event.key === "Escape") {
+    $("#searchTagSuggestions").hidden = true;
+    $("#searchInput").setAttribute("aria-expanded", "false");
+    $("#searchInput").value = state.search;
+  }
+};
+$("#searchTagSuggestions").onkeydown = (event) => {
+  const options = [
+    ...$("#searchTagSuggestions").querySelectorAll(
+      "[data-search-tag]",
+    ),
+  ];
+  const current = options.indexOf(document.activeElement);
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    const next = current + direction;
+    if (next < 0) $("#searchInput").focus();
+    else options[Math.min(next, options.length - 1)]?.focus();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    $("#searchTagSuggestions").hidden = true;
+    $("#searchInput").setAttribute("aria-expanded", "false");
+    $("#searchInput").focus();
+  }
+};
+$("#searchInputContainer").onfocusout = (event) => {
+  if (!$("#searchInputContainer").contains(event.relatedTarget)) {
+    $("#searchTagSuggestions").hidden = true;
+    $("#searchInput").setAttribute("aria-expanded", "false");
+  }
 };
 $("#dueDateToggle").onclick = openDueDatePopup;
 $("#dueDateToday").onclick = () => {
@@ -899,17 +1432,85 @@ $("#mobilePlanCalendarToggle").onclick = () => {
   );
 };
 window.addEventListener("resize", syncScheduleCalendarPlacement);
+const languageSelectTrigger = $("#languageSelectTrigger");
+const languageOptions = $("#languageOptions");
+languageSelectTrigger.onclick = () => {
+  if (languageOptions.hidden) openLanguagePicker();
+  else closeLanguagePicker();
+};
+languageSelectTrigger.onkeydown = (event) => {
+  if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    if (languageOptions.hidden)
+      openLanguagePicker(
+        event.key === "ArrowUp" ? languageOptions.children.length - 1 : null,
+      );
+    else if (event.key === "ArrowUp") moveLanguageOption(-1);
+    else moveLanguageOption(1);
+  }
+};
+languageOptions.onclick = (event) => {
+  const option = event.target.closest('[role="option"]');
+  if (!option) return;
+  $("#languageSelect").value = option.dataset.language;
+  $("#languageSelect").dispatchEvent(new Event("change", { bubbles: true }));
+  closeLanguagePicker({ restoreFocus: true });
+};
+languageOptions.onkeydown = (event) => {
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    moveLanguageOption(event.key === "ArrowDown" ? 1 : -1);
+  } else if (event.key === "Home" || event.key === "End") {
+    event.preventDefault();
+    openLanguagePicker(event.key === "Home" ? 0 : languageOptions.children.length - 1);
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    closeLanguagePicker({ restoreFocus: true });
+  } else if (
+    event.key.length === 1 &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey
+  ) {
+    const query = (languageOptions.dataset.typeahead || "") + event.key.toLocaleLowerCase();
+    languageOptions.dataset.typeahead = query;
+    clearTimeout(languageOptions.typeaheadTimer);
+    languageOptions.typeaheadTimer = setTimeout(() => {
+      languageOptions.dataset.typeahead = "";
+    }, 600);
+    const options = [...languageOptions.querySelectorAll('[role="option"]')];
+    const startIndex = Math.max(0, options.indexOf(document.activeElement));
+    const matches = options.map((option) => option.textContent.trim().toLocaleLowerCase());
+    const matchIndex = [
+      ...matches.slice(startIndex),
+      ...matches.slice(0, startIndex),
+    ].findIndex((label) => label.startsWith(query));
+    if (matchIndex >= 0) {
+      const optionIndex = (startIndex + matchIndex) % options.length;
+      options.forEach((option, index) => {
+        option.tabIndex = index === optionIndex ? 0 : -1;
+      });
+      options[optionIndex].focus();
+    }
+  }
+};
 document.addEventListener("pointerdown", (event) => {
+  if (!$("#searchInput").parentElement.contains(event.target)) {
+    $("#searchTagSuggestions").hidden = true;
+    $("#searchInput").setAttribute("aria-expanded", "false");
+  }
   if (!$("#mobileTagPicker").contains(event.target)) closeMobileTagPopup();
   if (!$("#mobilePlanCalendarPicker").contains(event.target))
     closeMobilePlanCalendarPopup();
   if (!$("#dueDatePicker").contains(event.target)) closeDueDatePopup();
+  if (!$("#languagePicker").contains(event.target)) closeLanguagePicker();
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeMobileTagPopup({ restoreFocus: true });
     closeMobilePlanCalendarPopup({ restoreFocus: true });
     closeDueDatePopup({ restoreFocus: true });
+    closeLanguagePicker({ restoreFocus: true });
   }
 });
 $("#planDate").onchange = loadPlan;
@@ -929,6 +1530,7 @@ document.querySelectorAll("[data-view]").forEach((button) => {
   button.onclick = () =>
     button.dataset.view === "plan" ? loadPlan() : loadTasks();
 });
+bindCardActions();
 loadTasks().catch((error) =>
   toast(language === "ru" ? error.message : t("requestFailed")),
 );
