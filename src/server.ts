@@ -2,10 +2,10 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, sep } from 'node:path';
-import { createTask, updateTask, setTaskStatus, listTasks, listScheduleTasks, getCalendarCounts, getTags, dayPlan, databasePath } from './store.ts';
+import { createTask, updateTask, setTaskStatus, listTasks, listScheduleTasks, getCalendarCounts, dayPlan, getTags } from './entities/task/index.ts';
 import { createWebSession, revokeWebSession, userIdForSession, userIdForToken } from './shared/auth/repository.ts';
 import { LOCAL_USER_ID, withUser } from './shared/auth/user-context.ts';
-import { db } from './shared/db/index.ts';
+import { databasePath, db } from './shared/db/index.ts';
 
 const dir=dirname(fileURLToPath(import.meta.url));
 const host=process.env.MCP_TODO_HOST || '127.0.0.1';

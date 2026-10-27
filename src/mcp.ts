@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod/v4';
-import { createTask, updateTask, setTaskStatus, listTasks, getTags, deleteTag, dayPlan } from './store.ts';
+import { createTask, updateTask, setTaskStatus, listTasks, dayPlan, getTags, deleteTag } from './entities/task/index.ts';
 import { userIdForToken } from './shared/auth/repository.ts';
 import { LOCAL_USER_ID, withUser } from './shared/auth/user-context.ts';
 

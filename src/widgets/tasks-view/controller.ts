@@ -1,8 +1,7 @@
-import { filterTasksBySearch } from "../../features/task-search/index.ts";
-import { renderTaskRow } from "../../entities/task/ui/task-row.ts";
+import { filterTasksBySearch, renderTaskRow } from "../../entities/task/client.ts";
 import { renderEmptyState } from "../../shared/ui/index.ts";
 
-export function createTasksPage({
+export function createTasksView({
   $,
   all,
   state,
@@ -23,7 +22,6 @@ export function createTasksPage({
     $("#loadMoreTasks").hidden = !state.tasksHasMore;
     $("#loadMoreTasks").disabled = false;
   }
-
   function bind() {
     $("#allTasks").onclick = () => {
       taskFilters.removeTagSearch();
@@ -63,8 +61,7 @@ export function createTasksPage({
         $("#searchInput").setAttribute("aria-expanded", "false");
         taskFilters.applySearch();
       } else if (event.key === "Escape") {
-        $("#searchTagSuggestions").hidden = true;
-        $("#searchInput").setAttribute("aria-expanded", "false");
+        $("#searchTagSuggestions").hidden = true; $("#searchInput").setAttribute("aria-expanded", "false");
         $("#searchInput").value = state.search;
       }
     };
@@ -77,30 +74,21 @@ export function createTasksPage({
         if (next < 0) $("#searchInput").focus();
         else options[Math.min(next, options.length - 1)]?.focus();
       } else if (event.key === "Escape") {
-        event.preventDefault();
-        $("#searchTagSuggestions").hidden = true;
-        $("#searchInput").setAttribute("aria-expanded", "false");
-        $("#searchInput").focus();
+        event.preventDefault(); $("#searchTagSuggestions").hidden = true;
+        $("#searchInput").setAttribute("aria-expanded", "false"); $("#searchInput").focus();
       }
     };
     $("#searchInputContainer").onfocusout = (event) => {
       if (!$("#searchInputContainer").contains(event.relatedTarget)) {
-        $("#searchTagSuggestions").hidden = true;
-        $("#searchInput").setAttribute("aria-expanded", "false");
+        $("#searchTagSuggestions").hidden = true; $("#searchInput").setAttribute("aria-expanded", "false");
       }
     };
     $("#dueDateToggle").onclick = taskCalendar.openDueDatePopup;
     $("#dueDateToday").onclick = () => {
-      $("#dueDate").value = today();
-      taskCalendar.setDueDateToToday();
-      taskCalendar.closeDueDatePopup();
-      loadTasks();
+      $("#dueDate").value = today(); taskCalendar.setDueDateToToday(); taskCalendar.closeDueDatePopup(); loadTasks();
     };
     $("#dueDateClear").onclick = () => {
-      $("#dueDate").value = "";
-      taskCalendar.updateDueDateLabel();
-      taskCalendar.closeDueDatePopup();
-      loadTasks();
+      $("#dueDate").value = ""; taskCalendar.updateDueDateLabel(); taskCalendar.closeDueDatePopup(); loadTasks();
     };
     $("#mobileTagToggle").onclick = () => {
       const popup = $("#mobileTagPopup");
@@ -109,6 +97,5 @@ export function createTasksPage({
       $("#mobileTagToggle").setAttribute("aria-expanded", String(willOpen));
     };
   }
-
   return { bind, render };
 }

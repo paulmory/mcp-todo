@@ -11,8 +11,15 @@
           document.documentElement.classList.add("dark");
         const accent = localStorage.getItem("todo-accent");
         if (accent) document.documentElement.dataset.accent = accent;
-        const language = localStorage.getItem("todo-language");
-        if (language) document.documentElement.lang = language;
+        const supportedLanguages = ["ru", "en", "es", "fr", "de", "zh", "ja", "pt", "ko", "tr"];
+        const savedLanguage = localStorage.getItem("todo-language");
+        const browserLanguages = navigator.languages?.length ? navigator.languages : [navigator.language];
+        const browserLanguage = browserLanguages
+          .map((language) => language?.toLowerCase().split("-")[0])
+          .find((language) => supportedLanguages.includes(language)) || "en";
+        document.documentElement.lang = supportedLanguages.includes(savedLanguage)
+          ? savedLanguage
+          : browserLanguage;
       } catch {}
     </script>
     <link rel="stylesheet" href="/src/style.css" />
@@ -262,9 +269,6 @@
             </button>
           </div>
         </div>
-        <button id="authToggle" type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted hover:bg-tint hover:text-accent" aria-label="Connect account" title="Connect account">
-          <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="h-[18px] w-[18px]"><circle cx="5.25" cy="10.75" r="2.75"></circle><path d="m7.2 8.8 5.3-5.3 1.5 1.5-1.6 1.6 1.2 1.2-1.5 1.5-1.2-1.2-1.8 1.8"></path></svg>
-        </button>
         <button
           id="themeToggle"
           type="button"
@@ -322,6 +326,9 @@
         >
           <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><rect x="2.25" y="3.5" width="11.5" height="10.25" rx="1.5"></rect><path d="M5 2v3M11 2v3M2.5 6.5h11"></path></svg>
           <span data-i18n="dayPlan">Day plan</span>
+        </button>
+        <button id="authToggle" type="button" hidden class="hidden" aria-label="Connect account" title="Connect account">
+          <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="h-[18px] w-[18px]"><circle cx="5.25" cy="10.75" r="2.75"></circle><path d="m7.2 8.8 5.3-5.3 1.5 1.5-1.6 1.6 1.2 1.2-1.5 1.5-1.2-1.2-1.8 1.8"></path></svg>
         </button>
         <button
           id="refresh"
@@ -660,6 +667,22 @@
           >
             Save
           </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="authDialog">
+      <form id="authForm">
+        <div class="mb-5 flex items-center justify-between">
+          <h2 data-i18n="signIn">Connect account</h2>
+          <button type="button" id="closeAuthDialog" class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-xl text-muted hover:bg-tint hover:text-ink" aria-label="Close" data-i18n-aria="close">×</button>
+        </div>
+        <label>
+          <span data-i18n="accessTokenPrompt">Enter your access token</span>
+          <input id="authToken" type="password" required autocomplete="current-password" data-i18n-placeholder="accessTokenPrompt" />
+        </label>
+        <div class="mt-5 flex justify-end gap-2">
+          <button type="button" id="cancelAuthDialog" class="rounded-md border border-line px-4 py-[10px] text-[13px] font-semibold text-ink hover:bg-tint" data-i18n="close">Close</button>
+          <button type="submit" class="rounded-md bg-action px-4 py-[10px] text-[13px] font-semibold text-white hover:bg-action-hover" data-i18n="signIn">Connect account</button>
         </div>
       </form>
     </dialog>

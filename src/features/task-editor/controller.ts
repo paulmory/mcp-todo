@@ -1,5 +1,5 @@
-import { parseTaskTags } from "../task-tags/model.ts";
-import { renderTaskTagEditor } from "../task-tags/ui/editor.ts";
+import { parseTaskTags } from "./model/tags.ts";
+import { renderTaskTagEditor } from "./ui/tag-editor.ts";
 
 export function createTaskEditor({
   $,

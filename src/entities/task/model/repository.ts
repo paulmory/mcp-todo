@@ -1,8 +1,6 @@
-import { db, databasePath } from "./shared/db/index.ts";
-import { assignTags, deleteTag, getTags, normalizeTags, withTags } from "./entities/tag/model/repository.ts";
-import { currentUserId } from "./shared/auth/user-context.ts";
-
-export { databasePath, deleteTag, getTags };
+import { db } from "../../../shared/db/index.ts";
+import { assignTags, normalizeTags, withTags } from "./tags.ts";
+import { currentUserId } from "../../../shared/auth/user-context.ts";
 
 const now = () => new Date().toISOString();
 const taskSelect = `SELECT t.id,t.title,t.description,t.due_date AS dueDate,t.due_time AS dueTime,t.priority,t.status,t.created_at AS createdAt,t.updated_at AS updatedAt FROM tasks t`;

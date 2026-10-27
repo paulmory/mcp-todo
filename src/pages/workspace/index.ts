@@ -1,13 +1,15 @@
 import { locales, translate } from "../../shared/config/i18n.ts";
 import { dateValue, escapeHtml as esc } from "../../shared/lib/index.ts";
-import { isOverdue } from "../../entities/task/model/due-date.ts";
-import { createTaskFilters } from "../../features/task-filters/controller.ts";
+import { createTaskFilters } from "../../features/task-filters/index.ts";
 import { createTaskEditor } from "../../features/task-editor/index.ts";
 import { createTaskCalendar } from "../../features/task-calendar/index.ts";
 import { createPreferences } from "../../features/preferences/index.ts";
-import { createWorkspaceDataController } from "./data-controller.ts";
-import { createTasksPage } from "../tasks/controller.ts";
-import { createSchedulePage } from "../schedule/controller.ts";
+import { createWorkspaceDataController } from "./model/data-controller.ts";
+import { createWorkspacePresentation } from "./model/presentation.ts";
+import { bindWorkspacePopupDismissal } from "./lib/dismiss-popups.ts";
+import { bindTaskCardActions } from "./lib/task-card-actions.ts";
+import { createTasksView } from "../../widgets/tasks-view/index.ts";
+import { createScheduleView } from "../../widgets/schedule-view/index.ts";
 
 export function initWorkspace() {
   // The UI is server-rendered HTML with stable IDs; centralize DOM access here.
@@ -22,7 +24,15 @@ export function initWorkspace() {
       return null;
     }
   })();
-  let language = Object.hasOwn(locales, savedLanguage) ? savedLanguage : "en";
+  const browserLanguage = (() => {
+    const candidates = navigator.languages?.length ? navigator.languages : [navigator.language];
+    for (const candidate of candidates) {
+      const languageCode = candidate?.toLowerCase().split("-")[0];
+      if (languageCode && Object.hasOwn(locales, languageCode)) return languageCode;
+    }
+    return "en";
+  })();
+  let language = Object.hasOwn(locales, savedLanguage) ? savedLanguage : browserLanguage;
   const t = (key: string, values: Record<string, string | number> = {}) =>
     translate(language, key, values);
   const today = () => new Date().toLocaleDateString("en-CA");
@@ -41,9 +51,9 @@ export function initWorkspace() {
   };
   let authState = { authenticated: false, local: true };
   let dataController;
-  let tasksPage;
-  let schedulePage;
-  function renderTasks() { tasksPage?.render(); }
+  let tasksView;
+  let scheduleView;
+  function renderTasks() { tasksView?.render(); }
   function loadTasks(options = {}) { return dataController.loadTasks(options); }
   function loadPlan() { return dataController.loadPlan(); }
   const taskEditor = createTaskEditor({
@@ -79,15 +89,9 @@ export function initWorkspace() {
     loadTasks,
   });
   const {
-    applySearch,
     closeMobileTagPopup,
-    removeTagSearch,
-    renderSearchTagSuggestions,
     renderTags,
     toggleTagFilter,
-    updateOptions: updateTagOptions,
-    updateStatusFilter,
-    updateTagSearch,
   } = taskFilters;
 
   const taskCalendar = createTaskCalendar({
@@ -113,54 +117,11 @@ export function initWorkspace() {
     setLanguage: (value) => { language = value; },
     translate,
   });
-  const todayDate = new Date();
-  function renderTodayLabel() {
-    const todayText = new Intl.DateTimeFormat(locales[language], {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    }).format(todayDate);
-    $("#todayLabel").textContent =
-      todayText.charAt(0).toLocaleUpperCase(locales[language]) +
-      todayText.slice(1);
-  }
-  function applyStaticTranslations() {
-    document.documentElement.lang = language;
-    document.title = t("appTitle");
-    all("[data-i18n]").forEach((element) => {
-      element.textContent = t(element.dataset.i18n);
-    });
-    if ($("#taskId").value) $("#dialogTitle").textContent = t("editTaskTitle");
-    document
-      .querySelectorAll<HTMLElement>("[data-i18n-aria]")
-      .forEach((element) =>
-        element.setAttribute("aria-label", t(element.dataset.i18nAria)),
-      );
-    document
-      .querySelectorAll<HTMLElement>("[data-i18n-title]")
-      .forEach((element) =>
-        element.setAttribute("title", t(element.dataset.i18nTitle)),
-      );
-    document
-      .querySelectorAll<HTMLElement>("[data-i18n-placeholder]")
-      .forEach((element) =>
-        element.setAttribute("placeholder", t(element.dataset.i18nPlaceholder)),
-      );
-    document
-      .querySelector("#accentPalette")
-      .setAttribute("aria-label", t("accentColor"));
-    $("#accentPickerToggle").setAttribute("aria-label", t("accentColor"));
-    $("#accentPickerToggle").setAttribute("title", t("accentColor"));
-    if (authState) {
-      const authLabel = authState.authenticated && !authState.local ? "signOut" : "signIn";
-      $("#authToggle").setAttribute("aria-label", t(authLabel));
-      $("#authToggle").setAttribute("title", t(authLabel));
-    }
-    preferences.syncLanguagePicker();
-    updateTagOptions();
-    taskCalendar.updateDueDateLabel();
-    renderTodayLabel();
-  }
+  const presentation = createWorkspacePresentation({
+    $, all, locales, getLanguage: () => language, t, state, preferences,
+    taskFilters, taskCalendar, getAuthState: () => authState, today,
+  });
+  const { activeView, applyStaticTranslations, taskComponentOptions } = presentation;
   applyStaticTranslations();
   $("#planDate").value = today();
 
@@ -209,28 +170,6 @@ export function initWorkspace() {
     }, duration);
   }
 
-  function formatDate(date, showOverdue = true, dueTime = null) {
-    if (!date) return "";
-    if (showOverdue && isOverdue(date, dueTime)) {
-      const localDate = new Date(`${date}T00:00:00`);
-      const shortDate = new Intl.DateTimeFormat(locales[language], {
-        day: "numeric",
-        month: "short",
-      }).format(localDate);
-      return t("overdue", { date: shortDate });
-    }
-    if (date === today()) return t("today");
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    if (date === tomorrow.toLocaleDateString("en-CA")) return t("tomorrow");
-    const localDate = new Date(`${date}T00:00:00`);
-    const shortDate = new Intl.DateTimeFormat(locales[language], {
-      day: "numeric",
-      month: "short",
-    }).format(localDate);
-    return shortDate;
-  }
-
   function renderStatusSwitch() {
     all("[data-status-view]").forEach((button) => {
       const active = button.dataset.statusView === state.status;
@@ -238,41 +177,7 @@ export function initWorkspace() {
     });
   }
 
-  function activeView(view) {
-    all("[data-view]").forEach((button) => {
-      const active = button.dataset.view === view;
-      button.classList.toggle("text-accent", active);
-      button.classList.toggle("bg-accent-soft", active);
-      button.classList.toggle("bg-transparent", !active);
-      button.classList.toggle("text-muted", !active);
-    });
-  }
-
-  function taskComponentOptions(mode = "tasks", index = 0) {
-    return {
-      mode,
-      index,
-      labels: {
-        edit: t("editTaskAria"),
-        defer: t("deferTask"),
-        restore: t("restoreTask"),
-        restoreAria: t("restoreTaskAria"),
-        select: (title) => t("selectTask", { title }),
-        deferred: t("deferredBadge"),
-        tagFilter: t("projectFilter"),
-      },
-      priorityLabels: {
-        high: t("priorityHigh"),
-        normal: t("priorityNormal"),
-        low: t("priorityLow"),
-      },
-      formatDate,
-      currentDate: today(),
-      selectedTag: state.tag,
-    };
-  }
-
-  tasksPage = createTasksPage({
+  tasksView = createTasksView({
     $,
     all,
     state,
@@ -304,33 +209,13 @@ export function initWorkspace() {
     taskComponentOptions,
     toast,
   });
-  schedulePage = createSchedulePage({ $, taskCalendar, loadPlan });
+  scheduleView = createScheduleView({ $, taskCalendar, loadPlan });
   const {
     changeTaskStatus,
     invalidateAvailableTags,
     loadMorePlanTasks,
     loadMoreTasks,
   } = dataController;
-
-  function bindCardActions() {
-    [$("#tasks"), $("#planItems")].forEach((container) => {
-      container.addEventListener("click", (event) => {
-        const button = event.target.closest(
-          "button[data-status], button[data-edit], button[data-filter-tag]",
-        );
-        if (!button || !container.contains(button)) return;
-
-        if (button.dataset.status) {
-          changeTaskStatus(button.dataset.id, button.dataset.status);
-        } else if (button.dataset.edit) {
-          const tasks = container.id === "planItems" ? state.planTasks : state.tasks;
-          taskEditor.edit(button.dataset.edit, tasks);
-        } else if (button.dataset.filterTag) {
-          toggleTagFilter(button.dataset.filterTag);
-        }
-      });
-    });
-  }
 
   taskEditor.bind();
 
@@ -359,24 +244,46 @@ export function initWorkspace() {
     try {
       if (authState.authenticated && !authState.local) {
         await api("/api/auth/logout", { method: "POST" });
+        await syncAuthState();
+        dataController.invalidateAvailableTags();
+        if (state.view === "plan") await loadPlan();
+        else await loadTasks({ refreshTags: true });
       } else {
-        const token = window.prompt(t("accessTokenPrompt"));
-        if (!token) return;
-        await api("/api/auth", { method: "POST", body: JSON.stringify({ token }) });
+        $("#authToken").value = "";
+        $("#authDialog").showModal();
+        $("#authToken").focus();
       }
+    } catch (error) {
+      toast(language === "ru" ? error.message : t("requestFailed"));
+    }
+  };
+  const closeAuthDialog = () => $("#authDialog").close();
+  $("#closeAuthDialog").onclick = closeAuthDialog;
+  $("#cancelAuthDialog").onclick = closeAuthDialog;
+  $("#authForm").onsubmit = async (event) => {
+    event.preventDefault();
+    const token = $("#authToken").value.trim();
+    if (!token) return;
+    const submit = $("#authForm").querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+      await api("/api/auth", { method: "POST", body: JSON.stringify({ token }) });
+      closeAuthDialog();
       await syncAuthState();
       dataController.invalidateAvailableTags();
       if (state.view === "plan") await loadPlan();
       else await loadTasks({ refreshTags: true });
     } catch (error) {
       toast(language === "ru" ? error.message : t("requestFailed"));
+    } finally {
+      submit.disabled = false;
     }
   };
   $("#closeDialog").onclick = () => $("#taskDialog").close();
   $("#refresh").onclick = () =>
     state.view === "plan" ? loadPlan() : loadTasks({ refreshTags: true });
-  tasksPage.bind();
-  schedulePage.bind();
+  tasksView.bind();
+  scheduleView.bind();
   preferences.bind(() => {
     try {
       localStorage.setItem("todo-language", language);
@@ -387,30 +294,12 @@ export function initWorkspace() {
     if (state.view === "plan") loadPlan();
     else loadTasks();
   });
-  document.addEventListener("pointerdown", (event) => {
-    if (!$("#searchInput").parentElement.contains(event.target)) {
-      $("#searchTagSuggestions").hidden = true;
-      $("#searchInput").setAttribute("aria-expanded", "false");
-    }
-    if (!$("#mobileTagPicker").contains(event.target)) closeMobileTagPopup();
-    if (!$("#mobilePlanCalendarPicker").contains(event.target))
-      taskCalendar.closeMobilePlanCalendarPopup();
-    if (!$("#dueDatePicker").contains(event.target)) taskCalendar.closeDueDatePopup();
-    if (!$("#languagePicker").contains(event.target)) preferences.closeLanguagePicker();
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      closeMobileTagPopup({ restoreFocus: true });
-      taskCalendar.closeMobilePlanCalendarPopup({ restoreFocus: true });
-      taskCalendar.closeDueDatePopup({ restoreFocus: true });
-      preferences.closeLanguagePicker({ restoreFocus: true });
-    }
-  });
   all("[data-view]").forEach((button) => {
     button.onclick = () =>
       button.dataset.view === "plan" ? loadPlan() : loadTasks();
   });
-  bindCardActions();
+  bindTaskCardActions({ $, state, taskEditor, changeTaskStatus, toggleTagFilter });
+  bindWorkspacePopupDismissal({ $, closeMobileTagPopup, taskCalendar, preferences });
   void syncAuthState();
   loadTasks().catch((error) =>
     toast(language === "ru" ? error.message : t("requestFailed")),

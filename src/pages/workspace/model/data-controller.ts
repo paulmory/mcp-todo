@@ -1,6 +1,6 @@
-import { renderTaskRow } from "../../entities/task/ui/task-row.ts";
-import { renderEmptyState } from "../../shared/ui/index.ts";
-import { buildTaskListQuery } from "../tasks/query.ts";
+import { renderTaskRow } from "../../../entities/task/client.ts";
+import { renderEmptyState } from "../../../shared/ui/index.ts";
+import { buildTaskListQuery } from "../../../features/task-filters/index.ts";
 
 /** Owns task/schedule requests, paging, and stale-request protection for workspace. */
 export function createWorkspaceDataController({

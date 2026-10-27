@@ -3,7 +3,7 @@ import {
   normalizeSearchTag,
   replaceSearchQualifier,
   searchTagTerms,
-} from "../task-search/index.ts";
+} from "../../entities/task/client.ts";
 
 export function createTaskFilters({
   $,
