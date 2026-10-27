@@ -53,7 +53,7 @@ export function initWorkspace() {
   let dataController;
   let tasksView;
   let scheduleView;
-  function renderTasks() { tasksView?.render(); }
+  function renderTasks(options = {}) { tasksView?.render(options); }
   function loadTasks(options = {}) { return dataController.loadTasks(options); }
   function loadPlan() { return dataController.loadPlan(); }
   const taskEditor = createTaskEditor({

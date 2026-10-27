@@ -1,5 +1,5 @@
 import { filterTasksBySearch, renderTaskRow } from "../../entities/task/client.ts";
-import { renderEmptyState } from "../../shared/ui/index.ts";
+import { createVirtualList, renderEmptyState } from "../../shared/ui/index.ts";
 
 export function createTasksView({
   $,
@@ -13,12 +13,19 @@ export function createTasksView({
   taskCalendar,
   loadTasks,
 }) {
-  function render() {
+  const list = createVirtualList<{ id: string | number }>({
+    container: $("#tasks"),
+    getKey: (task) => task.id,
+    estimateHeight: 96,
+    renderItem: (task) => renderTaskRow(task, taskComponentOptions()),
+  });
+
+  function render({ resetMeasurements = false } = {}) {
     const tasks = filterTasksBySearch(state.tasks, state.search, getLocale());
-    const options = taskComponentOptions();
-    $("#tasks").innerHTML = tasks.length
-      ? tasks.map((task) => renderTaskRow(task, options)).join("")
-      : renderEmptyState(t(state.search.trim() ? "emptySearch" : "emptyTasks"), t("emptyHint"));
+    list.setItems(tasks, {
+      resetMeasurements,
+      empty: renderEmptyState(t(state.search.trim() ? "emptySearch" : "emptyTasks"), t("emptyHint")),
+    });
     $("#loadMoreTasks").hidden = !state.tasksHasMore;
     $("#loadMoreTasks").disabled = false;
   }

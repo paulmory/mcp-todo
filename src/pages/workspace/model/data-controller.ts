@@ -1,6 +1,6 @@
 import { renderTaskRow } from "../../../entities/task/client.ts";
-import { renderEmptyState } from "../../../shared/ui/index.ts";
 import { buildTaskListQuery } from "../../../features/task-filters/index.ts";
+import { createVirtualList, renderEmptyState } from "../../../shared/ui/index.ts";
 
 /** Owns task/schedule requests, paging, and stale-request protection for workspace. */
 export function createWorkspaceDataController({
@@ -29,6 +29,15 @@ export function createWorkspaceDataController({
   let viewLoadGeneration = 0;
   let tasksPageLoading = false;
   let planPageLoading = false;
+  const planList = createVirtualList<{ id: string | number }>({
+    container: $("#planItems"),
+    getKey: (task) => task.id,
+    estimateHeight: 88,
+    renderItem: (task, index) => renderTaskRow(task, {
+      ...taskComponentOptions("plan"),
+      index,
+    }),
+  });
 
   function invalidateAvailableTags() {
     availableTagsGeneration += 1;
@@ -97,7 +106,7 @@ export function createWorkspaceDataController({
     state.tasks = result.tasks;
     state.tasksHasMore = result.hasMore;
     state.tasksOffset = result.nextOffset;
-    renderTasks();
+    renderTasks({ resetMeasurements: true });
     renderTags(tags);
   }
 
@@ -116,14 +125,10 @@ export function createWorkspaceDataController({
       });
       const result = await api(`/api/tasks?${query}`);
       if (requestId !== viewLoadGeneration || state.view !== "tasks") return;
-      const options = taskComponentOptions();
       state.tasks = [...state.tasks, ...result.tasks];
       state.tasksHasMore = result.hasMore;
       state.tasksOffset = result.nextOffset;
-      $("#tasks").insertAdjacentHTML(
-        "beforeend",
-        result.tasks.map((task) => renderTaskRow(task, options)).join(""),
-      );
+      renderTasks();
       $("#loadMoreTasks").hidden = !state.tasksHasMore;
     } catch (error) {
       toast(getLanguage() === "ru" ? error.message : t("requestFailed"));
@@ -175,10 +180,10 @@ export function createWorkspaceDataController({
     state.planHasMore = result.hasMore;
     state.planOffset = result.nextOffset;
     taskCalendar.renderScheduleCalendar();
-    const options = taskComponentOptions("plan");
-    $("#planItems").innerHTML = result.tasks.length
-      ? result.tasks.map((task, index) => renderTaskRow(task, { ...options, index })).join("")
-      : renderEmptyState(t("planEmpty"), t("planEmptyHint"));
+    planList.setItems(result.tasks, {
+      resetMeasurements: true,
+      empty: renderEmptyState(t("planEmpty"), t("planEmptyHint")),
+    });
     $("#loadMorePlanTasks").hidden = !state.planHasMore;
     $("#loadMorePlanTasks").disabled = planPageLoading;
   }
@@ -197,15 +202,10 @@ export function createWorkspaceDataController({
     try {
       const result = await api(`/api/schedule?${query}`);
       if (requestId !== viewLoadGeneration || state.view !== "plan") return;
-      const startIndex = state.planTasks.length;
       state.planTasks = [...state.planTasks, ...result.tasks];
       state.planHasMore = result.hasMore;
       state.planOffset = result.nextOffset;
-      const options = taskComponentOptions("plan");
-      $("#planItems").insertAdjacentHTML(
-        "beforeend",
-        result.tasks.map((task, index) => renderTaskRow(task, { ...options, index: startIndex + index })).join(""),
-      );
+      planList.setItems(state.planTasks);
       $("#loadMorePlanTasks").hidden = !state.planHasMore;
     } catch (error) {
       toast(getLanguage() === "ru" ? error.message : t("requestFailed"));
