@@ -2,20 +2,19 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, sep } from 'node:path';
-import { createTask, updateTask, setTaskStatus, listTasks, listScheduleTasks, getCalendarCounts, getStructure, getTags, dayPlan, databasePath } from './store.js';
+import { createTask, updateTask, setTaskStatus, listTasks, listScheduleTasks, getCalendarCounts, getTags, dayPlan, databasePath } from './store.ts';
 
 const dir=dirname(fileURLToPath(import.meta.url));
 const host='127.0.0.1';
 const port=Number(process.env.MCP_TODO_PORT || 4178);
-const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
+const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.ts':'text/javascript; charset=utf-8'};
 const web=createServer(async(req,res)=>{
   try {
     if(req.method==='GET' && req.url?.startsWith('/api/')) {
       const u=new URL(req.url,'http://localhost'); let data;
-      if(u.pathname==='/api/tasks') { const filters=Object.fromEntries(u.searchParams); if(u.searchParams.has('tags')) filters.tags=u.searchParams.getAll('tags'); if(u.searchParams.has('q')) filters.search=u.searchParams.get('q'); data=listTasks(filters); }
+      if(u.pathname==='/api/tasks') { const filters: Record<string, any>=Object.fromEntries(u.searchParams); if(u.searchParams.has('tags')) filters.tags=u.searchParams.getAll('tags'); if(u.searchParams.has('q')) filters.search=u.searchParams.get('q'); data=listTasks(filters); }
       else if(u.pathname==='/api/schedule') data=listScheduleTasks(u.searchParams.get('date'),u.searchParams.get('includeBacklog')==='true',Number(u.searchParams.get('limit')||100),Number(u.searchParams.get('offset')||0));
       else if(u.pathname==='/api/calendar-counts') data=getCalendarCounts(u.searchParams.get('from'),u.searchParams.get('to'));
-      else if(u.pathname==='/api/structure') data=getStructure(u.searchParams.get('withCounts')==='true');
       else if(u.pathname==='/api/tags') data=getTags(u.searchParams.get('withCounts')==='true');
       else if(u.pathname==='/api/plan') data=dayPlan(u.searchParams.get('date'),Number(u.searchParams.get('limit')||8));
       else {res.writeHead(404);return res.end('Not found');}

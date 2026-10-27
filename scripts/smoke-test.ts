@@ -2,12 +2,13 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const serverEntry = join(projectRoot, 'src', 'server.js');
+const serverEntry = join(projectRoot, 'src', 'server.ts');
 const tempDirectory = await mkdtemp(join(tmpdir(), 'mcp-todo-smoke-'));
 const databasePath = join(tempDirectory, 'smoke.sqlite');
 
@@ -19,12 +20,12 @@ async function freePort() {
   const server = createServer();
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
-  const { port } = server.address();
-  await new Promise((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()));
+  const { port } = server.address() as AddressInfo;
+  await new Promise<void>((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()));
   return port;
 }
 
-async function requestJson(baseUrl, path, { method = 'GET', body } = {}) {
+async function requestJson(baseUrl: string, path: string, { method = 'GET', body }: { method?: string; body?: unknown } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers: body ? { 'content-type': 'application/json' } : undefined,
@@ -39,7 +40,7 @@ async function requestJson(baseUrl, path, { method = 'GET', body } = {}) {
 
 const port = await freePort();
 const baseUrl = `http://127.0.0.1:${port}`;
-const child = spawn(process.execPath, [serverEntry], {
+const child = spawn(process.execPath, ['--experimental-strip-types', serverEntry], {
   cwd: projectRoot,
   env: {
     ...process.env,
@@ -59,7 +60,7 @@ try {
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error(`Server exited during startup. ${stderr}`);
     try {
-      const response = await fetch(`${baseUrl}/api/structure`);
+      const response = await fetch(`${baseUrl}/api/tags`);
       if (response.ok) { ready = true; break; }
     } catch {}
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
@@ -70,16 +71,15 @@ try {
   const html = await pageResponse.text();
   assert(pageResponse.ok && html.includes('<title>My ToDo</title>'), 'The production web page did not load.');
 
-  const initialStructure = await requestJson(baseUrl, '/api/structure?withCounts=true');
-  assert(Array.isArray(initialStructure) && initialStructure.length === 0, 'The isolated smoke-test database should start without projects.');
+  const initialTags = await requestJson(baseUrl, '/api/tags?withCounts=true');
+  assert(Array.isArray(initialTags) && initialTags.length === 0, 'The isolated smoke-test database should start without tags.');
 
   const dueDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const created = await requestJson(baseUrl, '/api/tasks', {
     method: 'POST',
     body: {
       title: 'Smoke test task',
-      project: 'Smoke test project',
-      section: 'Smoke test section',
+      tags: ['Smoke test', 'migration'],
       description: 'Created by the isolated smoke test.',
       dueDate,
       priority: 'high',
@@ -97,8 +97,8 @@ try {
   });
   assert(secondCreated.id && secondCreated.title === 'Second smoke test task', 'Second task creation failed.');
 
-  const openTasks = await requestJson(baseUrl, '/api/tasks?status=open&project=Smoke%20test%20project');
-  assert(Array.isArray(openTasks) && openTasks.some((task) => task.id === created.id), 'The legacy task list response was not preserved.');
+  const openTasks = await requestJson(baseUrl, '/api/tasks?status=open&tags=Smoke%20test');
+  assert(Array.isArray(openTasks) && openTasks.some((task) => task.id === created.id), 'Task tag filtering failed.');
 
   const firstPage = await requestJson(baseUrl, '/api/tasks?status=open&limit=1&offset=0');
   const secondPage = await requestJson(baseUrl, '/api/tasks?status=open&limit=1&offset=1');
@@ -110,9 +110,8 @@ try {
   const calendarCounts = await requestJson(baseUrl, `/api/calendar-counts?from=${dueDate}&to=${dueDate}`);
   assert(calendarCounts.some((item) => item.dueDate === dueDate && item.count === 2), 'Calendar task counts are incorrect.');
 
-  const structure = await requestJson(baseUrl, '/api/structure?withCounts=true');
-  const project = structure.find((item) => item.name === 'Smoke test project');
-  assert(project?.openTasks === 1 && project.sections.some((section) => section.name === 'Smoke test section'), 'Project or section creation failed.');
+  const tags = await requestJson(baseUrl, '/api/tags?withCounts=true');
+  assert(tags.some((tag) => tag.name === 'smoke test' && tag.openTasks === 1), 'Task tags or tag counts are incorrect.');
 
   const plan = await requestJson(baseUrl, `/api/plan?date=${dueDate}`);
   assert(plan.some((task) => task.id === created.id), 'The task was not included in the day plan.');
@@ -121,7 +120,7 @@ try {
   const completedTasks = await requestJson(baseUrl, '/api/tasks?status=done');
   assert(completedTasks.some((task) => task.id === created.id), 'Task status update failed.');
 
-  console.log('Smoke test passed: web page, task API, task and schedule pagination, calendar counts, project structure, day plan, and status updates.');
+  console.log('Smoke test passed: web page, task API, tags, task and schedule pagination, calendar counts, day plan, and status updates.');
 } finally {
   if (child.exitCode === null && child.signalCode === null) {
     child.kill('SIGINT');

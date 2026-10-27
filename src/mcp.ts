@@ -1,9 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod/v4';
-import { createTask, updateTask, setTaskStatus, listTasks, getTags, deleteTag, dayPlan } from './store.js';
+import { createTask, updateTask, setTaskStatus, listTasks, getTags, deleteTag, dayPlan } from './store.ts';
 
-const mcp = new McpServer({ name: 'mcp-todo', version: '0.1.0' });
+const mcp = new McpServer({ name: 'mcp-todo', version: '0.9.0' });
 const priority=z.enum(['low','normal','high']).describe('Task priority: low, normal, or high');
 const status=z.enum(['open','done','deferred']).describe('Task status: open, done, or deferred');
 const statusFilter=z.enum(['open','done','deferred','all']).describe('Status filter: open, deferred, done, or all');

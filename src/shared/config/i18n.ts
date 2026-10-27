@@ -695,7 +695,7 @@ const messages = {
   },
 };
 
-export function translate(language, key, values) {
+export function translate(language: string, key: string, values: Record<string, string | number> = {}) {
   const result = messages[language]?.[key] ?? messages.en[key] ?? key;
 
   // Most UI strings have no interpolation, so skip allocating/iterating values.

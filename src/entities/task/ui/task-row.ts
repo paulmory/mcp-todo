@@ -1,49 +1,20 @@
-const HTML_ENTITIES = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-const PRIORITY_BARS = [
-  [2, 10, 3, 4],
-  [6.5, 7, 3, 7],
-  [11, 4, 3, 10],
-];
-const PRIORITY_MASKS = { low: 0b001, normal: 0b011, high: 0b111 };
+import { isDueWithinNextHour, isOverdue } from "../model/due-date.ts";
+import { escapeHtml } from "../../../shared/lib/html.ts";
 
-export function escapeHtml(value = "") {
-  return String(value).replace(/[&<>"']/g, (character) => HTML_ENTITIES[character]);
-}
-
-export function isOverdue(date, time = null, currentDate, currentTime) {
-  const now = new Date();
-  const today = currentDate || now.toLocaleDateString("en-CA");
-  if (!date) return false;
-  if (date < today) return true;
-  if (date > today || !time) return false;
-
-  const clock = currentTime || `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-  return `${time}:00` < clock;
-}
-
-export function isDueWithinNextHour(date, time, currentDate) {
-  if (!date || !time || date !== (currentDate || new Date().toLocaleDateString("en-CA"))) {
-    return false;
-  }
-  const now = new Date();
-  const dueAt = new Date(`${date}T${time}:00`);
-  const millisecondsUntilDue = dueAt.getTime() - now.getTime();
-  return millisecondsUntilDue >= 0 && millisecondsUntilDue <= 60 * 60 * 1000;
-}
-
-export function dateClass(date, showOverdue = true, currentDate, dueTime, currentTime) {
+export function dateClass(date, showOverdue = true, currentDate = undefined, dueTime = undefined, currentTime = undefined) {
   if (showOverdue && isOverdue(date, dueTime, currentDate, currentTime)) {
     return "bg-rose-soft text-rose";
   }
   const today = currentDate || new Date().toLocaleDateString("en-CA");
   return date === today ? "bg-accent-soft text-accent" : "bg-tint text-muted";
 }
+
+const PRIORITY_BARS = [
+  [2, 10, 3, 4],
+  [6.5, 7, 3, 7],
+  [11, 4, 3, 10],
+];
+const PRIORITY_MASKS = { low: 0b001, normal: 0b011, high: 0b111 };
 
 export function priorityIcon(level, labels) {
   const activeBars = PRIORITY_MASKS[level] ?? PRIORITY_MASKS.normal;
@@ -66,10 +37,6 @@ export function renderTaskTags(tags = [], { activeTag, label }) {
     <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0 text-muted"><path d="M2 8.2V3.5a1.5 1.5 0 0 1 1.5-1.5h4.7l5.3 5.3a1.5 1.5 0 0 1 0 2.1l-3.1 3.1a1.5 1.5 0 0 1-2.1 0L2 8.2Z"></path><circle cx="5.2" cy="5.2" r=".7" fill="currentColor"></circle></svg>
     <span class="task-tag-items">${buttons}</span>
   </div>`;
-}
-
-export function renderEmptyState(title, hint) {
-  return `<div class="empty-state"><p class="empty-state-title">${escapeHtml(title)}</p><p class="empty-state-hint">${escapeHtml(hint)}</p></div>`;
 }
 
 function renderEditButton(task, label) {

@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @source "../index.html";
-@source "./app.js";
+@source "./app/index.ts";
+@source "./pages/workspace/index.ts";
+@source "./entities/task/ui/task-row.ts";
+@source "./shared/ui/empty-state.ts";
 
 @theme {
   --font-sans:

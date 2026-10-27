@@ -4,14 +4,14 @@ A personal task manager that runs locally. The Vite web interface and MCP server
 
 ## Requirements and setup
 
-- Node.js 22.5 or later.
+- Node.js 22.6 or later.
 - For development with Vite and hot module replacement (HMR), run `npm install`, then `npm run dev`.
 - The web interface is available at [http://127.0.0.1:5173](http://127.0.0.1:5173). Vite proxies `/api` requests to the local API at `127.0.0.1:4178`.
 - For production, run `npm start`. It builds the Vite bundle into `dist` and starts the Node server at [http://127.0.0.1:4178](http://127.0.0.1:4178).
 - To build the production bundle without starting the server, run `npm run build`.
 - To build the app and run the isolated web/API smoke test, run `npm run test:smoke`. It uses a temporary SQLite database.
 
-In development, Vite and the HTTP API start with one command. The MCP server runs as a separate stdio process from `src/mcp.js`. Both entry points use the same SQLite database and business logic from `src/store.js`. Existing projects and sections are migrated to task tags when either server starts.
+In development, Vite and the HTTP API start with one command. The MCP server runs as a separate stdio process from `src/mcp.ts`. Both entry points use the same SQLite database and business logic from `src/store.ts`. Existing project and section values are preserved as task tags during database migration.
 
 ## Configuration
 
@@ -33,7 +33,7 @@ Add the server to your MCP client's configuration for local stdio servers. The c
   "mcpServers": {
     "mcp-todo": {
       "command": "node",
-      "args": ["/absolute/path/to/mcp-todo/src/mcp.js"],
+      "args": ["--experimental-strip-types", "/absolute/path/to/mcp-todo/src/mcp.ts"],
       "env": {
         "MCP_TODO_DB": "/absolute/path/to/tasks.sqlite"
       }

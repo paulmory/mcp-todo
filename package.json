@@ -1,26 +1,34 @@
 {
   "name": "mcp-todo",
-  "version": "0.1.0",
+  "version": "0.9.0",
+  "description": "A local task manager with a web interface and MCP server",
+  "author": "paulmory",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paulmory/mcp-todo.git"
+  },
+  "license": "MIT",
   "private": true,
   "type": "module",
-  "description": "A local task manager with a web interface and MCP server",
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22.6.0"
   },
   "scripts": {
-    "dev": "concurrently -k -n api,vite -c cyan,magenta \"node src/server.js\" \"vite --host 127.0.0.1\"",
     "build": "vite build",
-    "start": "npm run build && node src/server.js",
-    "test:smoke": "npm run build && node scripts/smoke-test.js"
+    "dev": "concurrently -k -n api,vite -c cyan,magenta \"node --experimental-strip-types src/server.ts\" \"vite --host 127.0.0.1\"",
+    "start": "npm run build && node --experimental-strip-types src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test:smoke": "npm run build && node --experimental-strip-types scripts/smoke-test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.20.5",
     "concurrently": "^10.0.6",
     "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
     "vite": "^8.3.5"
-  },
-  "license": "MIT"
+  }
 }
