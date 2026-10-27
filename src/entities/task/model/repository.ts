@@ -1,9 +1,12 @@
 import { db } from "../../../shared/db/index.ts";
 import { assignTags, normalizeTags, withTags } from "./tags.ts";
 import { currentUserId } from "../../../shared/auth/user-context.ts";
+import { isOverdue } from "./due-date.ts";
 
 const now = () => new Date().toISOString();
 const taskSelect = `SELECT t.id,t.title,t.description,t.due_date AS dueDate,t.due_time AS dueTime,t.priority,t.status,t.created_at AS createdAt,t.updated_at AS updatedAt FROM tasks t`;
+const taskOrderBy = `t.due_date IS NULL,t.due_date,t.due_time IS NULL,t.due_time,
+  CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,t.created_at,t.id`;
 const normalize = (value: unknown): string | null =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
@@ -66,9 +69,7 @@ const statements = {
         WHEN t.due_date IS NULL AND t.priority='high' THEN 2
         ELSE 3
       END,
-      t.due_date IS NULL,t.due_date,t.due_time IS NULL,t.due_time,
-      CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
-      t.created_at
+      ${taskOrderBy}
     LIMIT ?`),
 };
 
@@ -219,7 +220,7 @@ export function listTasks(filters: {
     args.push(term);
   }
   const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
-  const orderSql = ' ORDER BY t.due_date IS NULL,t.due_date,t.due_time IS NULL,t.due_time,CASE t.priority WHEN \'high\' THEN 0 WHEN \'normal\' THEN 1 ELSE 2 END,t.created_at,t.id';
+  const orderSql = ` ORDER BY ${taskOrderBy}`;
   if (filters.limit === undefined) {
     return withTags(prepare(`${taskSelect}${whereSql}${orderSql}`).all(...args));
   }
@@ -235,8 +236,7 @@ export function listScheduleTasks(date, includeBacklog = false, limit = 100, off
   ({ limit, offset } = pagination(limit, offset));
   const where = includeBacklog ? 't.user_id=? AND t.status=\'open\' AND (t.due_date<=? OR t.due_date IS NULL)' : 't.user_id=? AND t.status=\'open\' AND t.due_date=?';
   const rows = prepare(`${taskSelect} WHERE ${where}
-    ORDER BY t.due_date IS NULL,t.due_date,t.due_time IS NULL,t.due_time,
-      CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,t.created_at,t.id
+    ORDER BY ${taskOrderBy}
     LIMIT ? OFFSET ?`).all(currentUserId(), date, limit + 1, offset);
   const hasMore = rows.length > limit;
   const tasks = withTags(rows.slice(0, limit));
@@ -250,15 +250,6 @@ export function getCalendarCounts(from, to) {
   return prepare(`SELECT due_date AS dueDate,COUNT(*) AS count FROM tasks
     WHERE user_id=? AND status='open' AND due_date BETWEEN ? AND ? GROUP BY due_date`).all(currentUserId(), from, to);
 }
-function isTaskOverdue(dueDate, dueTime) {
-  const now = new Date();
-  const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
-  if (dueDate < today) return true;
-  if (dueDate !== today || !dueTime) return false;
-  const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-  return `${dueTime}:00` < currentTime;
-}
-
 export function dayPlan(date, limit = 8) {
   validateDate(date, 'plan date');
   const { limit: pageSize } = pagination(limit, 0, 100);
@@ -266,7 +257,7 @@ export function dayPlan(date, limit = 8) {
   const tasks = statements.dayPlan.all(currentUserId(), date, date, date, pageSize);
   return withTags(tasks).map((task, index) => ({
     position: index + 1,
-    reason: task.dueDate && (task.dueDate < date || isTaskOverdue(task.dueDate, task.dueTime))
+    reason: task.dueDate && (task.dueDate < date || isOverdue(task.dueDate, task.dueTime))
       ? 'Overdue task'
       : task.dueDate === date
         ? 'Due on the selected date'
