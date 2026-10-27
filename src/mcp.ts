@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod/v4';
-import { createTask, updateTask, setTaskStatus, listTasks, dayPlan, getTags, deleteTag } from './entities/task/index.ts';
+import { createTask, deleteTask, getTask, updateTask, setTaskStatus, listTasks, dayPlan, getTags, deleteTag } from './entities/task/index.ts';
 import { userIdForToken } from './shared/auth/repository.ts';
 import { LOCAL_USER_ID, withUser } from './shared/auth/user-context.ts';
 
@@ -24,9 +24,15 @@ function register(name,description,schema,fn) {
 register('create_task','Create a task. Tags are created automatically when needed.',{
   title:z.string().min(1).describe('Task title'),tags:z.array(z.string().min(1).max(100)).optional().describe('Tags to assign to the task; new tags are created automatically'),description:z.string().optional().describe('Task description'),dueDate:optionalDate,dueTime:optionalTime,priority:priority.optional()
 },createTask);
-register('list_tasks','List tasks. Defaults to open tasks; set status=done to include completed tasks.',{
-  tags:z.array(z.string().min(1).max(100)).optional().describe('Return tasks that have all of these tags'),status:statusFilter.optional(),dueDate:optionalDate,overdue:z.boolean().optional(),priority:priority.optional()
+register('list_tasks','List tasks. Defaults to open tasks; set status=all to include every status. Results are ordered by due date, time, then priority.',{
+  tags:z.array(z.string().min(1).max(100)).optional().describe('Return tasks that have all of these tags'),status:statusFilter.optional(),dueDate:optionalDate,undated:z.boolean().optional().describe('Return tasks without a due date'),overdue:z.boolean().optional(),priority:priority.optional(),
+  search:z.string().max(500).optional().describe('Search task titles, descriptions, and tags; supports tag:<name>'),
+  untagged:z.boolean().optional().describe('Return only tasks without tags'),
+  limit:z.number().int().min(1).max(200).optional().describe('Page size from 1 to 200; returns tasks, hasMore, and nextOffset'),
+  offset:z.number().int().min(0).optional().describe('Number of matching tasks to skip when using pagination')
 },listTasks);
+register('get_task','Get one task and its tags by stable ID.',{id:z.string().uuid().describe('Stable task ID')},({id})=>getTask(id));
+register('delete_task','Permanently delete a task by stable ID. Its tag assignments are removed automatically.',{id:z.string().uuid().describe('Stable task ID')},({id})=>deleteTask(id));
 register('get_tags','List available task tags. Set withCounts=true to include open-task counts.',{withCounts:z.boolean().optional()},({withCounts})=>getTags(withCounts));
 register('delete_tag','Delete a tag only when it is not assigned to any task. Fails with the usage count if the tag is in use.',{name:z.string().trim().min(1).max(100).describe('Tag name to delete')},({name})=>deleteTag(name));
 register('update_task','Update a task by its stable ID.',{

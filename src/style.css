@@ -5,6 +5,13 @@
 @source "./entities/task/ui/task-row.ts";
 @source "./shared/ui/empty-state.ts";
 
+:root {
+  --ui-radius: 6px;
+  --ui-radius-small: 4px;
+  --ui-shadow-menu: 0 8px 24px rgb(31 35 40 / 18%);
+  --ui-shadow-popover: 0 8px 24px rgb(1 4 9 / 28%);
+}
+
 @theme {
   --font-sans:
     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -35,7 +42,7 @@
     scrollbar-gutter: stable;
   }
   body {
-    @apply mx-auto min-w-[320px] max-w-[80rem] bg-canvas px-4 py-5 font-sans text-ink md:px-8 md:py-7;
+    @apply mx-auto min-w-[320px] max-w-5xl bg-canvas px-4 py-5 font-sans text-ink md:px-8 md:py-7;
   }
   h1,
   h2,
@@ -494,7 +501,7 @@ html.dark dialog[open] {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--color-line);
-  border-radius: 9999px;
+  border-radius: 50%;
   background: var(--color-surface);
 }
 .accent-picker-popover {
@@ -507,9 +514,9 @@ html.dark dialog[open] {
   gap: 4px;
   padding: 8px;
   border: 1px solid var(--color-line);
-  border-radius: 6px;
+  border-radius: var(--ui-radius);
   background: var(--color-surface);
-  box-shadow: 0 8px 24px rgb(31 35 40 / 18%);
+  box-shadow: var(--ui-shadow-menu);
 }
 .accent-picker-option {
   position: relative;
@@ -519,7 +526,7 @@ html.dark dialog[open] {
   align-items: center;
   justify-content: center;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--ui-radius);
   background: transparent;
 }
 .accent-picker-option:hover {
@@ -589,7 +596,7 @@ html.dark .accent-color-dot[data-color="neutral"] {
   justify-content: space-between;
   gap: 8px;
   border: 1px solid var(--color-line);
-  border-radius: 6px;
+  border-radius: var(--ui-radius);
   background: var(--color-surface);
   padding: 0 10px;
   color: var(--color-ink);
@@ -621,9 +628,9 @@ html.dark .accent-color-dot[data-color="neutral"] {
   overflow-y: auto;
   padding: 4px;
   border: 1px solid var(--color-line);
-  border-radius: 6px;
+  border-radius: var(--ui-radius);
   background: var(--color-surface);
-  box-shadow: 0 8px 24px rgb(31 35 40 / 18%);
+  box-shadow: var(--ui-shadow-menu);
 }
 .language-picker-menu[hidden] {
   display: none;
@@ -633,7 +640,7 @@ html.dark .accent-color-dot[data-color="neutral"] {
   width: 100%;
   min-height: 34px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--ui-radius-small);
   background: transparent;
   padding: 7px 9px;
   color: var(--color-ink);
@@ -661,32 +668,13 @@ body > header {
   background: var(--color-surface);
   color: var(--color-ink);
 }
-body > header h1 {
-  color: var(--color-ink);
-}
-body > header #todayLabel {
-  color: var(--color-muted);
-}
-body > header .language-select-trigger {
-  border-color: var(--color-line);
-  background: var(--color-surface);
-  color: var(--color-ink);
-}
-body > header .accent-picker-trigger {
-  border-color: var(--color-line);
-  background: var(--color-surface);
-}
 html.dark body > header {
   background: var(--color-canvas);
 }
-html.dark body > header .language-select-trigger,
-html.dark body > header .accent-picker-trigger {
-  background: var(--color-surface);
-}
 button:not(.theme-switch):not(.accent-picker-trigger):not(
     .accent-picker-option
-  ):not(.task-check-target) {
-  border-radius: 6px;
+  ):not(.task-check-target):not(.status-option) {
+  border-radius: var(--ui-radius);
 }
 #statusSwitch {
   border: 0;
@@ -706,10 +694,6 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
 #planDateSwitch::-webkit-scrollbar {
   display: none;
 }
-#statusSwitch .status-option,
-#planDateSwitch .status-option {
-  border-radius: 0;
-}
 #statusSwitch .status-option[aria-pressed="true"],
 #planDateSwitch .status-option[aria-pressed="true"] {
   margin-bottom: -1px;
@@ -722,19 +706,10 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
-#tasks {
-  border-top: 0;
-  border-radius: 0 0 6px 6px;
-}
-#tagPanel > section {
-  border-radius: 6px;
-}
+#tasks,
 #planItems {
   border-top: 0;
-  border-radius: 0 0 6px 6px;
-}
-.task-actions .icon-button {
-  border-radius: 6px;
+  border-radius: 0 0 var(--ui-radius) var(--ui-radius);
 }
 @media (hover: hover) and (pointer: fine) {
   .task-row .task-actions {
@@ -750,8 +725,8 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
   }
 }
 #toast {
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgb(31 35 40 / 18%);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow-menu);
 }
 
 @media (min-width: 768px) {
@@ -795,7 +770,7 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
   justify-content: space-between;
   gap: 0.5rem;
   border: 1px solid var(--color-line);
-  border-radius: 6px;
+  border-radius: var(--ui-radius);
   background: var(--color-surface);
   padding: 0 0.5rem;
   color: var(--color-ink);
@@ -825,9 +800,9 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
   top: calc(100% + 0.5rem);
   right: 0;
   border: 1px solid var(--color-line);
-  border-radius: 6px;
+  border-radius: var(--ui-radius);
   background: var(--color-surface);
-  box-shadow: 0 8px 24px rgb(1 4 9 / 28%);
+  box-shadow: var(--ui-shadow-popover);
 }
 .popover-panel[hidden] {
   display: none;
@@ -847,11 +822,11 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
   max-height: min(60vh, 22rem);
   overflow-y: auto;
   border: 1px solid var(--color-line);
-  border-radius: 8px;
+  border-radius: calc(var(--ui-radius) + 2px);
   background: var(--color-surface);
   padding: 0.375rem;
   color: var(--color-ink);
-  box-shadow: 0 8px 24px rgb(1 4 9 / 28%);
+  box-shadow: var(--ui-shadow-popover);
 }
 .search-tag-suggestions[hidden] {
   display: none;
@@ -863,7 +838,7 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
   align-items: center;
   gap: 0.625rem;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--ui-radius);
   background: transparent;
   padding: 0.5rem 0.625rem;
   color: var(--color-ink);
@@ -895,7 +870,7 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
   gap: 0.375rem;
   margin-top: 0.5rem;
   border: 1px solid var(--color-line);
-  border-radius: 6px;
+  border-radius: var(--ui-radius);
   background: var(--color-surface);
   padding: 0.375rem 0.5rem;
   color: var(--color-ink);
@@ -963,10 +938,10 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
   max-height: min(13rem, 40vh);
   overflow-y: auto;
   border: 1px solid var(--color-line);
-  border-radius: 6px;
+  border-radius: var(--ui-radius);
   background: var(--color-surface);
   padding: 0.25rem;
-  box-shadow: 0 8px 24px rgb(1 4 9 / 28%);
+  box-shadow: var(--ui-shadow-popover);
 }
 .task-tag-options[hidden] {
   display: none;
@@ -977,7 +952,7 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
   min-height: 2.25rem;
   align-items: center;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--ui-radius-small);
   background: transparent;
   padding: 0.375rem 0.625rem;
   color: var(--color-ink);
@@ -1123,7 +1098,7 @@ button:not(.theme-switch):not(.accent-picker-trigger):not(
   align-items: center;
   justify-content: center;
   border: 1px solid var(--color-line);
-  border-radius: 6px;
+  border-radius: var(--ui-radius);
   background: var(--color-surface);
   color: var(--color-muted);
 }

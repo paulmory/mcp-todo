@@ -58,7 +58,7 @@ export function renderTaskRow(task, options) {
   const safeTitle = escapeHtml(task.title);
   const editLabel = `${labels.edit}: ${task.title}`;
   const selector = isPlan
-    ? `<span class="pt-1 text-center text-base leading-5 font-semibold text-line">${index + 1}</span>`
+    ? `<span class="pt-2 text-center text-base leading-5 font-semibold text-line">${index + 1}</span>`
     : isDone
       ? `<button class="task-check-target task-done-control" type="button" title="${escapeHtml(labels.restore)}" aria-label="${escapeHtml(labels.restoreAria)}" data-status="open" data-id="${task.id}"><span class="task-done-indicator" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-2.5 w-2.5"><path d="m3 8 3 3 7-7"></path></svg></span></button>`
 : `<button class="task-check-target task-open-control" type="button" title="${escapeHtml(labels.select(task.title))}" aria-label="${escapeHtml(labels.select(task.title))}" data-status="done" data-id="${task.id}"><span class="task-checkbox-indicator" aria-hidden="true"></span></button>`;

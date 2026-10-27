@@ -1,7 +1,9 @@
 export {
   createTask,
+  deleteTask,
   dayPlan,
   getCalendarCounts,
+  getTask,
   listScheduleTasks,
   listTasks,
   setTaskStatus,

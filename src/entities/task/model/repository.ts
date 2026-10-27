@@ -97,6 +97,12 @@ function get(id) {
   const task = statements.findTask.get(currentUserId(), id);
   return task ? withTags([task])[0] : null;
 }
+
+export function getTask(id: string) {
+  const task = get(id);
+  if (!task) throw new Error(`Task with ID "${id}" was not found.`);
+  return task;
+}
 function validateDate(value, field='due date') {
   if (value == null || value === '') return null;
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -165,6 +171,16 @@ export function setTaskStatus(id, status) {
     return get(id);
   });
 }
+
+export function deleteTask(id: string) {
+  return transaction(() => {
+    const result = db.prepare("DELETE FROM tasks WHERE user_id=? AND id=?")
+      .run(currentUserId(), id);
+    if (!result.changes) throw new Error(`Task with ID "${id}" was not found.`);
+    return { deleted: true, id };
+  });
+}
+
 export function listTasks(filters: {
   status?: string;
   tags?: string[];
@@ -172,6 +188,7 @@ export function listTasks(filters: {
   untagged?: boolean;
   priority?: string;
   dueDate?: string;
+  undated?: boolean;
   overdue?: boolean;
   search?: string;
   limit?: number;
@@ -202,6 +219,7 @@ export function listTasks(filters: {
     where.push('t.due_date=?');
     args.push(validateDate(filters.dueDate, 'due date'));
   }
+  if (filters.undated) where.push('t.due_date IS NULL');
   if (filters.overdue) where.push(`t.status!='done' AND t.due_date IS NOT NULL AND (
     t.due_date < date('now','localtime') OR
     (t.due_date = date('now','localtime') AND t.due_time IS NOT NULL

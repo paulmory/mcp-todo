@@ -56,10 +56,13 @@ The adapter boundary isolates connection creation, but query code currently uses
 ## MCP tools
 
 - `create_task` — create a task with zero or more tags. New tags are created automatically when needed.
-- `list_tasks` — list tasks with optional tag, status, due-date, overdue, and priority filters. A task must have all requested tags to match.
+- `list_tasks` — list tasks with optional tag, status, due-date, undated, overdue, priority, and text-search filters. A task must have all requested tags to match. Set `limit` and `offset` for pagination.
+- `get_task` — get one task by ID, including its tags.
 - `get_tags` — list available tags, optionally with open-task counts.
+- `delete_tag` — delete a tag only if it is not assigned to a task.
 - `update_task` — update a task by ID, including replacing its tags. Pass an empty `tags` array to remove all tags.
 - `update_task_status` — complete, defer, or reopen a task.
+- `delete_task` — permanently delete a task by ID.
 - `get_day_plan` — generate a suggested plan for a selected date without modifying task data.
 
 ## Task dates, priorities, and statuses
