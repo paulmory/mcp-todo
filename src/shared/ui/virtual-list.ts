@@ -17,33 +17,70 @@ export function createVirtualList<T>({
   let items: T[] = [];
   let emptyHtml = "";
   let heights = new Map<string | number, number>();
-  let offsets: number[] = [0];
+  let itemHeights: number[] = [];
+  let tree: number[] = [0];
   let renderedRange = "";
   let frame = 0;
 
   container.setAttribute("role", "list");
 
-  function itemHeight(index: number) {
-    return heights.get(getKey(items[index])) ?? estimateHeight;
+  function prefixHeight(count: number) {
+    let total = 0;
+    for (let index = count; index > 0; index -= index & -index) total += tree[index];
+    return total;
   }
 
-  function rebuildOffsets() {
-    offsets = new Array(items.length + 1);
-    offsets[0] = 0;
-    for (let index = 0; index < items.length; index += 1) {
-      offsets[index + 1] = offsets[index] + itemHeight(index);
+  function addHeight(index: number, delta: number) {
+    for (let node = index + 1; node < tree.length; node += node & -node) tree[node] += delta;
+  }
+
+  function appendItem(item: T) {
+    const index = items.length;
+    const height = heights.get(getKey(item)) ?? estimateHeight;
+    const node = index + 1;
+    const rangeStart = node - (node & -node);
+    tree.push(height + prefixHeight(index) - prefixHeight(rangeStart));
+    items.push(item);
+    itemHeights.push(height);
+  }
+
+  function resetItems(nextItems: T[]) {
+    // Keep the rendered list independent from caller-owned arrays so appendItems
+    // cannot mutate workspace state as a side effect.
+    items = [...nextItems];
+    itemHeights = new Array(items.length);
+    tree = new Array(items.length + 1).fill(0);
+    for (let index = 1; index <= items.length; index += 1) {
+      const height = heights.get(getKey(items[index - 1])) ?? estimateHeight;
+      itemHeights[index - 1] = height;
+      tree[index] += height;
+      const parent = index + (index & -index);
+      if (parent <= items.length) tree[parent] += tree[index];
     }
+  }
+
+  function setMeasuredHeight(index: number, height: number) {
+    const difference = height - itemHeights[index];
+    if (Math.abs(difference) <= 1) return 0;
+    itemHeights[index] = height;
+    heights.set(getKey(items[index]), height);
+    addHeight(index, difference);
+    return difference;
   }
 
   function firstItemAfter(position: number) {
-    let low = 0;
-    let high = items.length;
-    while (low < high) {
-      const middle = (low + high) >>> 1;
-      if (offsets[middle + 1] <= position) low = middle + 1;
-      else high = middle;
+    let index = 0;
+    let total = 0;
+    let step = 1;
+    while ((step << 1) <= items.length) step <<= 1;
+    for (; step > 0; step >>= 1) {
+      const candidate = index + step;
+      if (candidate <= items.length && total + tree[candidate] <= position) {
+        index = candidate;
+        total += tree[candidate];
+      }
     }
-    return low;
+    return index;
   }
 
   function render() {
@@ -69,16 +106,15 @@ export function createVirtualList<T>({
       start = Math.min(start, focusedIndex);
       end = Math.max(end, focusedIndex + 1);
     }
-    const topHeight = offsets[start];
-    const bottomHeight = offsets[items.length] - offsets[end];
+    const topHeight = prefixHeight(start);
+    const totalHeight = prefixHeight(items.length);
+    const bottomHeight = totalHeight - prefixHeight(end);
 
     const range = `${start}:${end}:${items.length}`;
     if (range === renderedRange) return;
 
-    const oldAnchor = container.querySelector<HTMLElement>(
-      `[data-virtual-index="${Math.min(Math.max(start, 0), items.length - 1)}"]`,
-    );
-    const anchorKey = oldAnchor ? getKey(items[Number(oldAnchor.dataset.virtualIndex)]) : null;
+    const visibleIndex = firstItemAfter(viewportTop);
+    const oldAnchor = container.querySelector<HTMLElement>(`[data-virtual-index="${visibleIndex}"]`);
     const anchorTop = oldAnchor?.getBoundingClientRect().top;
     const rows = items.slice(start, end).map((item, offset) => {
       const index = start + offset;
@@ -95,22 +131,18 @@ export function createVirtualList<T>({
     let changed = false;
     container.querySelectorAll<HTMLElement>("[data-virtual-index]").forEach((row) => {
       const index = Number(row.dataset.virtualIndex);
-      const key = getKey(items[index]);
       const measured = row.getBoundingClientRect().height;
-      if (measured > 0 && Math.abs((heights.get(key) ?? 0) - measured) > 1) {
-        heights.set(key, measured);
+      if (measured > 0 && setMeasuredHeight(index, measured)) {
         changed = true;
       }
     });
 
     if (changed) {
-      rebuildOffsets();
-      renderedRange = "";
-      if (anchorKey !== null && anchorTop !== undefined) {
-        const anchorIndex = items.findIndex((item) => getKey(item) === anchorKey);
-        const newAnchor = container.querySelector<HTMLElement>(`[data-virtual-index="${anchorIndex}"]`);
+      if (anchorTop !== undefined) {
+        const newAnchor = container.querySelector<HTMLElement>(`[data-virtual-index="${visibleIndex}"]`);
         if (newAnchor) window.scrollBy(0, newAnchor.getBoundingClientRect().top - anchorTop);
       }
+      renderedRange = "";
       scheduleRender();
     }
   }
@@ -127,7 +159,13 @@ export function createVirtualList<T>({
       items = nextItems;
       emptyHtml = empty;
       if (resetMeasurements) heights = new Map();
-      rebuildOffsets();
+      resetItems(nextItems);
+      renderedRange = "";
+      render();
+    },
+    appendItems(nextItems: T[]) {
+      if (!nextItems.length) return;
+      for (const item of nextItems) appendItem(item);
       renderedRange = "";
       render();
     },

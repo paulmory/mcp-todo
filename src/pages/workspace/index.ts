@@ -54,6 +54,7 @@ export function initWorkspace() {
   let tasksView;
   let scheduleView;
   function renderTasks(options = {}) { tasksView?.render(options); }
+  function appendTasks(tasks) { tasksView?.append(tasks); }
   function loadTasks(options = {}) { return dataController.loadTasks(options); }
   function loadPlan() { return dataController.loadPlan(); }
   const taskEditor = createTaskEditor({
@@ -206,6 +207,7 @@ export function initWorkspace() {
     closeMobileTagPopup,
     renderTags,
     renderTasks,
+    appendTasks,
     taskComponentOptions,
     toast,
   });

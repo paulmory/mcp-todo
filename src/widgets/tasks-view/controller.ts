@@ -29,6 +29,12 @@ export function createTasksView({
     $("#loadMoreTasks").hidden = !state.tasksHasMore;
     $("#loadMoreTasks").disabled = false;
   }
+  function append(tasks: any[]) {
+    const visibleTasks = filterTasksBySearch(tasks, state.search, getLocale());
+    list.appendItems(visibleTasks);
+    $("#loadMoreTasks").hidden = !state.tasksHasMore;
+    $("#loadMoreTasks").disabled = false;
+  }
   function bind() {
     $("#allTasks").onclick = () => {
       taskFilters.removeTagSearch();
@@ -104,5 +110,5 @@ export function createTasksView({
       $("#mobileTagToggle").setAttribute("aria-expanded", String(willOpen));
     };
   }
-  return { bind, render };
+  return { append, bind, render };
 }

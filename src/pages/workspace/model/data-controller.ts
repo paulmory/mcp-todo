@@ -19,6 +19,7 @@ export function createWorkspaceDataController({
   closeMobileTagPopup,
   renderTags,
   renderTasks,
+  appendTasks,
   taskComponentOptions,
   toast,
 }) {
@@ -125,10 +126,10 @@ export function createWorkspaceDataController({
       });
       const result = await api(`/api/tasks?${query}`);
       if (requestId !== viewLoadGeneration || state.view !== "tasks") return;
-      state.tasks = [...state.tasks, ...result.tasks];
+      state.tasks.push(...result.tasks);
       state.tasksHasMore = result.hasMore;
       state.tasksOffset = result.nextOffset;
-      renderTasks();
+      appendTasks(result.tasks);
       $("#loadMoreTasks").hidden = !state.tasksHasMore;
     } catch (error) {
       toast(getLanguage() === "ru" ? error.message : t("requestFailed"));
@@ -202,10 +203,10 @@ export function createWorkspaceDataController({
     try {
       const result = await api(`/api/schedule?${query}`);
       if (requestId !== viewLoadGeneration || state.view !== "plan") return;
-      state.planTasks = [...state.planTasks, ...result.tasks];
+      state.planTasks.push(...result.tasks);
       state.planHasMore = result.hasMore;
       state.planOffset = result.nextOffset;
-      planList.setItems(state.planTasks);
+      planList.appendItems(result.tasks);
       $("#loadMorePlanTasks").hidden = !state.planHasMore;
     } catch (error) {
       toast(getLanguage() === "ru" ? error.message : t("requestFailed"));
