@@ -14,6 +14,7 @@
     "node": ">=22.6.0"
   },
   "scripts": {
+    "backup": "node --experimental-strip-types scripts/backup.ts",
     "build": "vite build",
     "dev": "concurrently -k -n api,vite -c cyan,magenta \"node --experimental-strip-types src/server.ts\" \"vite --host 127.0.0.1\"",
     "start": "npm run build && node --experimental-strip-types src/server.ts",

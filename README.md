@@ -35,6 +35,7 @@ The `env` object is optional for local use. Restart or reload the MCP client aft
 | Variable | Default | Description |
 | --- | --- | --- |
 | `MCP_TODO_DB` | `~/.local/share/mcp-todo/tasks.sqlite` | SQLite database file path shared by the web server and MCP process. |
+| `MCP_TODO_BACKUP_DIR` | `~/.local/share/mcp-todo/backups` | Directory for automatic and manual SQLite snapshots. |
 | `MCP_TODO_HOST` | `127.0.0.1` | Web/API bind address. Use a loopback address for unauthenticated local access. |
 | `MCP_TODO_PORT` | `4178` | Web/API server port. |
 | `MCP_TODO_TOKEN` | unset | User access token for an MCP process or the web server. Stored credentials are hashed in the database. |
@@ -69,13 +70,17 @@ By default, `get_day_plan` returns up to 8 open tasks: overdue tasks, tasks due 
 
 ## Backups
 
-Stop all MCP-ToDo processes before copying the database file, or use SQLite’s backup API for a consistent live backup. For example, after stopping the service:
+MCP-ToDo creates one verified SQLite snapshot per UTC day when the web/API server or MCP process opens the database, then checks hourly while running in case a new day has started. It keeps the 14 newest daily snapshots. Before applying a schema migration, it also creates a separate snapshot and preserves it until you remove it. Automatic backup failures are logged and do not prevent the app from starting; a migration backup failure stops the migration so the existing database is not rewritten without a recovery point.
+
+Create an additional snapshot at any time with:
 
 ```sh
-cp "$HOME/.local/share/mcp-todo/tasks.sqlite" "$HOME/tasks-backup-$(date +%Y%m%d).sqlite"
+npm run backup
 ```
 
-Do not remove SQLite WAL files while the service is running.
+Snapshots are made with SQLite `VACUUM INTO`, checked with `PRAGMA integrity_check`, and stored with owner-only file permissions. Set `MCP_TODO_BACKUP_DIR` to change the snapshot directory. Manual and pre-migration snapshots are not automatically removed.
+
+To restore a snapshot, stop all MCP-ToDo processes, preserve copies of the current database and its `-wal`/`-shm` sidecars, then copy the selected snapshot over the configured `MCP_TODO_DB` file. Remove any stale `-wal`/`-shm` sidecars only while the processes are stopped, then restart the app. If manually copying the live database instead of restoring a snapshot, stop all MCP-ToDo processes first and copy the database together with any WAL state.
 
 ## License
 

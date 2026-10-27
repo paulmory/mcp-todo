@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { createDatabaseBackup } from "./backup.ts";
 
 type Migration = {
   version: number;
@@ -176,7 +177,7 @@ const migrations: Migration[] = [
   { version: 1, name: "initial-schema", up: initializeFromExistingData },
 ];
 
-export function runMigrations(db: DatabaseSync): void {
+export function runMigrations(db: DatabaseSync, databasePath: string): void {
   const currentVersion = Number(
     (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version,
   );
@@ -192,6 +193,10 @@ export function runMigrations(db: DatabaseSync): void {
   if (currentVersion === 1 && isCurrentSchema(db)) return;
 
   const [initial] = migrations;
+  const existingTables = tableNames(db);
+  if (existingTables.size > 0) {
+    createDatabaseBackup(db, databasePath, "pre-migration");
+  }
   db.exec("BEGIN IMMEDIATE");
   try {
     initial.up(db);
