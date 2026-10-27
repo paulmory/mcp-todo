@@ -1,5 +1,6 @@
 import { db, databasePath } from "./shared/db/index.ts";
 import { assignTags, deleteTag, getTags, normalizeTags, withTags } from "./entities/tag/model/repository.ts";
+import { currentUserId } from "./shared/auth/user-context.ts";
 
 export { databasePath, deleteTag, getTags };
 
@@ -53,12 +54,12 @@ function pagination(limit: unknown, offset: unknown, max = 200) {
 }
 
 const statements = {
-  findTask: db.prepare(`${taskSelect} WHERE t.id=?`),
-  insertTask: db.prepare("INSERT INTO tasks(id,title,description,due_date,due_time,priority,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'open',?,?)"),
-  updateTask: db.prepare('UPDATE tasks SET title=?,description=?,due_date=?,due_time=?,priority=?,updated_at=? WHERE id=?'),
-  setTaskStatus: db.prepare('UPDATE tasks SET status=?,updated_at=? WHERE id=?'),
+  findTask: db.prepare(`${taskSelect} WHERE t.user_id=? AND t.id=?`),
+  insertTask: db.prepare("INSERT INTO tasks(id,user_id,title,description,due_date,due_time,priority,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'open',?,?)"),
+  updateTask: db.prepare('UPDATE tasks SET title=?,description=?,due_date=?,due_time=?,priority=?,updated_at=? WHERE user_id=? AND id=?'),
+  setTaskStatus: db.prepare('UPDATE tasks SET status=?,updated_at=? WHERE user_id=? AND id=?'),
   dayPlan: db.prepare(`${taskSelect}
-    WHERE t.status='open'
+    WHERE t.user_id=? AND t.status='open'
       AND ((t.due_date IS NOT NULL AND t.due_date<=?)
         OR (t.due_date IS NULL AND t.priority IN ('high','normal')))
     ORDER BY CASE
@@ -94,7 +95,7 @@ function parseSearch(search) {
   };
 }
 function get(id) {
-  const task = statements.findTask.get(id);
+  const task = statements.findTask.get(currentUserId(), id);
   return task ? withTags([task])[0] : null;
 }
 function validateDate(value, field='due date') {
@@ -132,7 +133,7 @@ export function createTask(input) {
   const stamp = now();
   return transaction(() => {
     statements.insertTask.run(
-      id, title, normalize(input.description), due, dueTime, priority, stamp, stamp,
+      id, currentUserId(), title, normalize(input.description), due, dueTime, priority, stamp, stamp,
     );
     assignTags(id, input.tags ?? []);
     return get(id);
@@ -149,7 +150,7 @@ export function updateTask(id, changes) {
     const dueTime = changes.dueTime === undefined ? current.dueTime : validateTime(changes.dueTime);
     const priority = changes.priority === undefined ? current.priority : validatePriority(changes.priority);
     const description = changes.description === undefined ? current.description : normalize(changes.description);
-    statements.updateTask.run(title, description, due, dueTime, priority, now(), id);
+    statements.updateTask.run(title, description, due, dueTime, priority, now(), currentUserId(), id);
     if (changes.tags !== undefined) assignTags(id, changes.tags);
     return get(id);
   });
@@ -160,7 +161,7 @@ export function setTaskStatus(id, status) {
     throw new Error('Status must be open, done, or deferred.');
   }
   return transaction(() => {
-    const result = statements.setTaskStatus.run(status, now(), id);
+    const result = statements.setTaskStatus.run(status, now(), currentUserId(), id);
     if (!result.changes) throw new Error(`Task with ID "${id}" was not found.`);
     return get(id);
   });
@@ -177,8 +178,8 @@ export function listTasks(filters: {
   limit?: number;
   offset?: number;
 } = {}) {
-  const where = [];
-  const args = [];
+  const where = ['t.user_id=?'];
+  const args = [currentUserId()];
   if (filters.status && filters.status !== 'all') {
     if (!['open', 'done', 'deferred'].includes(filters.status)) {
       throw new Error('Status filter must be open, done, deferred, or all.');
@@ -190,10 +191,10 @@ export function listTasks(filters: {
   }
   const requestedTags = filters.tags ?? (filters.tag ? [filters.tag] : []);
   for (const tag of normalizeTags(requestedTags)) {
-    where.push('EXISTS (SELECT 1 FROM task_tags tf JOIN tags tg ON tg.id=tf.tag_id WHERE tf.task_id=t.id AND tg.name=? COLLATE NOCASE)');
+    where.push('EXISTS (SELECT 1 FROM task_tags tf JOIN tags tg ON tg.id=tf.tag_id AND tg.user_id=tf.user_id WHERE tf.user_id=t.user_id AND tf.task_id=t.id AND tg.name=? COLLATE NOCASE)');
     args.push(tag);
   }
-  if (filters.untagged) where.push('NOT EXISTS (SELECT 1 FROM task_tags tu WHERE tu.task_id=t.id)');
+  if (filters.untagged) where.push('NOT EXISTS (SELECT 1 FROM task_tags tu WHERE tu.user_id=t.user_id AND tu.task_id=t.id)');
   if (filters.priority) {
     where.push('t.priority=?');
     args.push(validatePriority(filters.priority));
@@ -210,13 +211,13 @@ export function listTasks(filters: {
   const { terms, tagTerms } = parseSearch(filters.search);
   for (const term of terms) {
     where.push(`(unicode_contains(t.title,?) OR unicode_contains(COALESCE(t.description,''),?)
-      OR EXISTS (SELECT 1 FROM task_tags ts JOIN tags tx ON tx.id=ts.tag_id
-        WHERE ts.task_id=t.id AND unicode_contains(tx.name,?)))`);
+      OR EXISTS (SELECT 1 FROM task_tags ts JOIN tags tx ON tx.id=ts.tag_id AND tx.user_id=ts.user_id
+        WHERE ts.user_id=t.user_id AND ts.task_id=t.id AND unicode_contains(tx.name,?)))`);
     args.push(term, term, term);
   }
   for (const term of tagTerms) {
-    where.push(`EXISTS (SELECT 1 FROM task_tags ts JOIN tags tx ON tx.id=ts.tag_id
-      WHERE ts.task_id=t.id AND unicode_contains(tx.name,?))`);
+    where.push(`EXISTS (SELECT 1 FROM task_tags ts JOIN tags tx ON tx.id=ts.tag_id AND tx.user_id=ts.user_id
+      WHERE ts.user_id=t.user_id AND ts.task_id=t.id AND unicode_contains(tx.name,?))`);
     args.push(term);
   }
   const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
@@ -234,11 +235,11 @@ export function listTasks(filters: {
 export function listScheduleTasks(date, includeBacklog = false, limit = 100, offset = 0) {
   validateDate(date, 'schedule date');
   ({ limit, offset } = pagination(limit, offset));
-  const where = includeBacklog ? 't.status=\'open\' AND (t.due_date<=? OR t.due_date IS NULL)' : 't.status=\'open\' AND t.due_date=?';
+  const where = includeBacklog ? 't.user_id=? AND t.status=\'open\' AND (t.due_date<=? OR t.due_date IS NULL)' : 't.user_id=? AND t.status=\'open\' AND t.due_date=?';
   const rows = prepare(`${taskSelect} WHERE ${where}
     ORDER BY t.due_date IS NULL,t.due_date,t.due_time IS NULL,t.due_time,
       CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,t.created_at,t.id
-    LIMIT ? OFFSET ?`).all(date, limit + 1, offset);
+    LIMIT ? OFFSET ?`).all(currentUserId(), date, limit + 1, offset);
   const hasMore = rows.length > limit;
   const tasks = withTags(rows.slice(0, limit));
   return { tasks, hasMore, nextOffset: offset + tasks.length };
@@ -249,7 +250,7 @@ export function getCalendarCounts(from, to) {
   validateDate(to, 'calendar end date');
   if (from > to) throw new Error('Calendar start date must not be after its end date.');
   return prepare(`SELECT due_date AS dueDate,COUNT(*) AS count FROM tasks
-    WHERE status='open' AND due_date BETWEEN ? AND ? GROUP BY due_date`).all(from, to);
+    WHERE user_id=? AND status='open' AND due_date BETWEEN ? AND ? GROUP BY due_date`).all(currentUserId(), from, to);
 }
 function isTaskOverdue(dueDate, dueTime) {
   const now = new Date();
@@ -264,7 +265,7 @@ export function dayPlan(date, limit = 8) {
   validateDate(date, 'plan date');
   const { limit: pageSize } = pagination(limit, 0, 100);
 
-  const tasks = statements.dayPlan.all(date, date, date, pageSize);
+  const tasks = statements.dayPlan.all(currentUserId(), date, date, date, pageSize);
   return withTags(tasks).map((task, index) => ({
     position: index + 1,
     reason: task.dueDate && (task.dueDate < date || isTaskOverdue(task.dueDate, task.dueTime))

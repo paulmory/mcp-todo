@@ -1,26 +1,28 @@
 import { db } from "../../../shared/db/index.ts";
+import { currentUserId } from "../../../shared/auth/user-context.ts";
 
 const statements = {
-  findTagsByName: db.prepare("SELECT id,name FROM tags WHERE name=? COLLATE NOCASE ORDER BY id"),
-  insertTag: db.prepare("INSERT INTO tags(name) VALUES(?) ON CONFLICT(name) DO NOTHING"),
-  findTag: db.prepare("SELECT id FROM tags WHERE name=? COLLATE NOCASE"),
-  tagUsageCount: db.prepare("SELECT COUNT(*) AS count FROM task_tags WHERE tag_id=?"),
-  mergeTagAssignments: db.prepare("INSERT OR IGNORE INTO task_tags(task_id,tag_id) SELECT task_id,? FROM task_tags WHERE tag_id=?"),
-  removeTagAssignments: db.prepare("DELETE FROM task_tags WHERE tag_id=?"),
-  removeTag: db.prepare("DELETE FROM tags WHERE id=?"),
-  renameTag: db.prepare("UPDATE tags SET name=? WHERE id=?"),
-  removeTaskTags: db.prepare("DELETE FROM task_tags WHERE task_id=?"),
-  insertTaskTag: db.prepare("INSERT INTO task_tags(task_id,tag_id) VALUES(?,?)"),
-  tags: db.prepare("SELECT name FROM tags ORDER BY name COLLATE NOCASE"),
+  findTagsByName: db.prepare("SELECT id,name FROM tags WHERE user_id=? AND name=? COLLATE NOCASE ORDER BY id"),
+  insertTag: db.prepare("INSERT OR IGNORE INTO tags(user_id,name) VALUES(?,?)"),
+  findTag: db.prepare("SELECT id FROM tags WHERE user_id=? AND name=? COLLATE NOCASE"),
+  tagUsageCount: db.prepare("SELECT COUNT(*) AS count FROM task_tags WHERE user_id=? AND tag_id=?"),
+  mergeTagAssignments: db.prepare("INSERT OR IGNORE INTO task_tags(user_id,task_id,tag_id) SELECT user_id,task_id,? FROM task_tags WHERE user_id=? AND tag_id=?"),
+  removeTagAssignments: db.prepare("DELETE FROM task_tags WHERE user_id=? AND tag_id=?"),
+  removeTag: db.prepare("DELETE FROM tags WHERE user_id=? AND id=?"),
+  renameTag: db.prepare("UPDATE tags SET name=? WHERE user_id=? AND id=?"),
+  removeTaskTags: db.prepare("DELETE FROM task_tags WHERE user_id=? AND task_id=?"),
+  insertTaskTag: db.prepare("INSERT INTO task_tags(user_id,task_id,tag_id) VALUES(?,?,?)"),
+  tags: db.prepare("SELECT name FROM tags WHERE user_id=? ORDER BY name COLLATE NOCASE"),
   tagsWithCounts: db.prepare(`SELECT tg.name,COUNT(DISTINCT CASE WHEN t.status='open' THEN t.id END) AS openTasks
-    FROM tags tg LEFT JOIN task_tags tt ON tt.tag_id=tg.id LEFT JOIN tasks t ON t.id=tt.task_id
-    GROUP BY tg.id ORDER BY tg.name COLLATE NOCASE`),
+    FROM tags tg LEFT JOIN task_tags tt ON tt.user_id=tg.user_id AND tt.tag_id=tg.id
+    LEFT JOIN tasks t ON t.user_id=tt.user_id AND t.id=tt.task_id
+    WHERE tg.user_id=? GROUP BY tg.id ORDER BY tg.name COLLATE NOCASE`),
 };
 
 const taskTagQueries = new Map<string, ReturnType<typeof db.prepare>>();
 function taskTagsStatement(batchSize: number) {
   const placeholders = Array.from({ length: batchSize }, () => "?").join(",");
-  const sql = `SELECT tt.task_id,tg.name FROM task_tags tt JOIN tags tg ON tg.id=tt.tag_id WHERE tt.task_id IN (${placeholders}) ORDER BY tg.name COLLATE NOCASE`;
+  const sql = `SELECT tt.task_id,tg.name FROM task_tags tt JOIN tags tg ON tg.id=tt.tag_id AND tg.user_id=tt.user_id WHERE tt.user_id=? AND tt.task_id IN (${placeholders}) ORDER BY tg.name COLLATE NOCASE`;
   let statement = taskTagQueries.get(sql);
   if (!statement) {
     statement = db.prepare(sql);
@@ -60,27 +62,29 @@ export function normalizeTags(values: unknown): string[] {
 }
 
 function ensureTag(name: string): number {
+  const userId = currentUserId();
   const key = name.toLowerCase();
-  const matches = statements.findTagsByName.all(key);
+  const matches = statements.findTagsByName.all(userId, key);
   if (matches.length) {
     const canonicalId = matches[0].id;
     for (const duplicate of matches.slice(1)) {
-      statements.mergeTagAssignments.run(canonicalId, duplicate.id);
-      statements.removeTagAssignments.run(duplicate.id);
-      statements.removeTag.run(duplicate.id);
+      statements.mergeTagAssignments.run(canonicalId, userId, duplicate.id);
+      statements.removeTagAssignments.run(userId, duplicate.id);
+      statements.removeTag.run(userId, duplicate.id);
     }
-    if (matches[0].name !== key) statements.renameTag.run(key, canonicalId);
+    if (matches[0].name !== key) statements.renameTag.run(key, userId, canonicalId);
     return Number(canonicalId);
   }
 
-  statements.insertTag.run(key);
-  return Number(statements.findTag.get(key).id);
+  statements.insertTag.run(userId, key);
+  return Number(statements.findTag.get(userId, key).id);
 }
 
 export function assignTags(taskId: string, values: unknown): void {
   const tagIds = normalizeTags(values).map(ensureTag);
-  statements.removeTaskTags.run(taskId);
-  for (const tagId of tagIds) statements.insertTaskTag.run(taskId, tagId);
+  const userId = currentUserId();
+  statements.removeTaskTags.run(userId, taskId);
+  for (const tagId of tagIds) statements.insertTaskTag.run(userId, taskId, tagId);
 }
 
 export function withTags(tasks: any[]): any[] {
@@ -90,7 +94,7 @@ export function withTags(tasks: any[]): any[] {
   const tagsByTask = new Map<string, string[]>(ids.map((id) => [id, []]));
   for (let offset = 0; offset < ids.length; offset += 500) {
     const batch = ids.slice(offset, offset + 500);
-    const rows = taskTagsStatement(batch.length).all(...batch) as Array<{ task_id: string; name: string }>;
+    const rows = taskTagsStatement(batch.length).all(currentUserId(), ...batch) as Array<{ task_id: string; name: string }>;
     for (const row of rows) tagsByTask.get(row.task_id)?.push(row.name);
   }
 
@@ -98,7 +102,7 @@ export function withTags(tasks: any[]): any[] {
 }
 
 export function getTags(withCounts = false) {
-  return (withCounts ? statements.tagsWithCounts : statements.tags).all();
+  return (withCounts ? statements.tagsWithCounts : statements.tags).all(currentUserId());
 }
 
 export function deleteTag(value: unknown) {
@@ -108,15 +112,16 @@ export function deleteTag(value: unknown) {
 
   db.exec("BEGIN IMMEDIATE");
   try {
-    const tag = statements.findTagsByName.get(name);
+    const userId = currentUserId();
+    const tag = statements.findTagsByName.get(userId, name);
     if (!tag) throw new Error(`Tag "${name}" was not found.`);
 
-    const usageCount = statements.tagUsageCount.get(tag.id).count;
+    const usageCount = statements.tagUsageCount.get(userId, tag.id).count;
     if (Number(usageCount) > 0) {
       throw new Error(`Tag "${tag.name}" is assigned to ${usageCount} task${usageCount === 1 ? "" : "s"} and cannot be deleted.`);
     }
 
-    statements.removeTag.run(tag.id);
+    statements.removeTag.run(userId, tag.id);
     db.exec("COMMIT");
     return { deleted: true, name: tag.name };
   } catch (error) {

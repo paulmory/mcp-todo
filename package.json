@@ -17,6 +17,7 @@
     "build": "vite build",
     "dev": "concurrently -k -n api,vite -c cyan,magenta \"node --experimental-strip-types src/server.ts\" \"vite --host 127.0.0.1\"",
     "start": "npm run build && node --experimental-strip-types src/server.ts",
+    "user:create": "node --experimental-strip-types scripts/create-user.ts",
     "typecheck": "tsc --noEmit",
     "test:smoke": "npm run build && node --experimental-strip-types scripts/smoke-test.ts"
   },

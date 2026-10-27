@@ -39,6 +39,7 @@ export function initWorkspace() {
     planHasMore: false,
     planOffset: 0,
   };
+  let authState = { authenticated: false, local: true };
   let dataController;
   let tasksPage;
   let schedulePage;
@@ -150,6 +151,11 @@ export function initWorkspace() {
       .setAttribute("aria-label", t("accentColor"));
     $("#accentPickerToggle").setAttribute("aria-label", t("accentColor"));
     $("#accentPickerToggle").setAttribute("title", t("accentColor"));
+    if (authState) {
+      const authLabel = authState.authenticated && !authState.local ? "signOut" : "signIn";
+      $("#authToggle").setAttribute("aria-label", t(authLabel));
+      $("#authToggle").setAttribute("title", t(authLabel));
+    }
     preferences.syncLanguagePicker();
     updateTagOptions();
     taskCalendar.updateDueDateLabel();
@@ -169,6 +175,13 @@ export function initWorkspace() {
         language === "ru" ? data.error || t("requestFailed") : t("requestFailed"),
       );
     return data;
+  }
+
+  async function syncAuthState() {
+    authState = await api("/api/auth");
+    const button = $("#authToggle");
+    button.setAttribute("aria-label", t(authState.authenticated && !authState.local ? "signOut" : "signIn"));
+    button.title = t(authState.authenticated && !authState.local ? "signOut" : "signIn");
   }
 
   let toastTimer;
@@ -342,6 +355,23 @@ export function initWorkspace() {
   }
 
   $("#newTask").onclick = () => taskEditor.open();
+  $("#authToggle").onclick = async () => {
+    try {
+      if (authState.authenticated && !authState.local) {
+        await api("/api/auth/logout", { method: "POST" });
+      } else {
+        const token = window.prompt(t("accessTokenPrompt"));
+        if (!token) return;
+        await api("/api/auth", { method: "POST", body: JSON.stringify({ token }) });
+      }
+      await syncAuthState();
+      dataController.invalidateAvailableTags();
+      if (state.view === "plan") await loadPlan();
+      else await loadTasks({ refreshTags: true });
+    } catch (error) {
+      toast(language === "ru" ? error.message : t("requestFailed"));
+    }
+  };
   $("#closeDialog").onclick = () => $("#taskDialog").close();
   $("#refresh").onclick = () =>
     state.view === "plan" ? loadPlan() : loadTasks({ refreshTags: true });
@@ -381,6 +411,7 @@ export function initWorkspace() {
       button.dataset.view === "plan" ? loadPlan() : loadTasks();
   });
   bindCardActions();
+  void syncAuthState();
   loadTasks().catch((error) =>
     toast(language === "ru" ? error.message : t("requestFailed")),
   );

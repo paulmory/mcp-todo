@@ -2,6 +2,12 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod/v4';
 import { createTask, updateTask, setTaskStatus, listTasks, getTags, deleteTag, dayPlan } from './store.ts';
+import { userIdForToken } from './shared/auth/repository.ts';
+import { LOCAL_USER_ID, withUser } from './shared/auth/user-context.ts';
+
+const configuredToken = process.env.MCP_TODO_TOKEN;
+const configuredUserId = configuredToken ? userIdForToken(configuredToken) : LOCAL_USER_ID;
+if (!configuredUserId) throw new Error('MCP_TODO_TOKEN is invalid or revoked.');
 
 const mcp = new McpServer({ name: 'mcp-todo', version: '0.9.0' });
 const priority=z.enum(['low','normal','high']).describe('Task priority: low, normal, or high');
@@ -11,7 +17,7 @@ const optionalDate=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional()
 const optionalTime=z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/).nullable().optional().describe('Execution time in 24-hour HH:MM format');
 function register(name,description,schema,fn) {
   mcp.registerTool(name,{description,inputSchema:z.object(schema)},async args=>{
-    try { const result=await fn(args); return {content:[{type:'text',text:JSON.stringify(result,null,2)}]}; }
+    try { const result=await withUser(configuredUserId, () => fn(args)); return {content:[{type:'text',text:JSON.stringify(result,null,2)}]}; }
     catch(error) { return {isError:true,content:[{type:'text',text:error.message}]}; }
   });
 }

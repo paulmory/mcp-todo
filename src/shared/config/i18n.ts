@@ -13,6 +13,9 @@ export const locales = {
 
 const messages = {
   ru: {
+    signIn: "Подключить аккаунт",
+    signOut: "Отключить аккаунт",
+    accessTokenPrompt: "Введите ключ доступа",
     appTitle: "Мои задачи",
     accentColor: "Акцентный цвет",
     language: "Язык",
@@ -81,6 +84,9 @@ const messages = {
     requestFailed: "Не удалось выполнить запрос",
   },
   en: {
+    signIn: "Connect account",
+    signOut: "Disconnect account",
+    accessTokenPrompt: "Enter your access token",
     appTitle: "My Tasks",
     accentColor: "Accent color",
     language: "Language",
@@ -149,6 +155,9 @@ const messages = {
     requestFailed: "Could not complete the request",
   },
   es: {
+    signIn: "Conectar cuenta",
+    signOut: "Desconectar cuenta",
+    accessTokenPrompt: "Introduce tu token de acceso",
     appTitle: "Mis tareas",
     accentColor: "Color de acento",
     language: "Idioma",
@@ -217,6 +226,9 @@ const messages = {
     requestFailed: "No se pudo completar la solicitud",
   },
   fr: {
+    signIn: "Connecter le compte",
+    signOut: "Déconnecter le compte",
+    accessTokenPrompt: "Saisissez votre jeton d’accès",
     appTitle: "Mes tâches",
     accentColor: "Couleur d’accentuation",
     language: "Langue",
@@ -285,6 +297,9 @@ const messages = {
     requestFailed: "Impossible de traiter la demande",
   },
   de: {
+    signIn: "Konto verbinden",
+    signOut: "Konto trennen",
+    accessTokenPrompt: "Zugriffstoken eingeben",
     appTitle: "Meine Aufgaben",
     accentColor: "Akzentfarbe",
     language: "Sprache",
@@ -354,6 +369,9 @@ const messages = {
     requestFailed: "Anfrage konnte nicht ausgeführt werden",
   },
   zh: {
+    signIn: "连接账户",
+    signOut: "断开账户",
+    accessTokenPrompt: "输入访问令牌",
     appTitle: "我的任务",
     accentColor: "强调色",
     language: "语言",
@@ -422,6 +440,9 @@ const messages = {
     requestFailed: "无法完成请求",
   },
   ja: {
+    signIn: "アカウントを接続",
+    signOut: "アカウントを切断",
+    accessTokenPrompt: "アクセストークンを入力",
     appTitle: "マイタスク",
     accentColor: "アクセントカラー",
     language: "言語",
@@ -490,6 +511,9 @@ const messages = {
     requestFailed: "リクエストを完了できませんでした",
   },
   pt: {
+    signIn: "Conectar conta",
+    signOut: "Desconectar conta",
+    accessTokenPrompt: "Insira seu token de acesso",
     appTitle: "Minhas tarefas",
     accentColor: "Cor de destaque",
     language: "Idioma",
@@ -558,6 +582,9 @@ const messages = {
     requestFailed: "Não foi possível concluir a solicitação",
   },
   ko: {
+    signIn: "계정 연결",
+    signOut: "계정 연결 해제",
+    accessTokenPrompt: "액세스 토큰을 입력하세요",
     appTitle: "내 할 일",
     accentColor: "강조 색상",
     language: "언어",
@@ -626,6 +653,9 @@ const messages = {
     requestFailed: "요청을 완료하지 못했습니다",
   },
   tr: {
+    signIn: "Hesabı bağla",
+    signOut: "Hesap bağlantısını kes",
+    accessTokenPrompt: "Erişim belirtecinizi girin",
     appTitle: "Görevlerim",
     accentColor: "Vurgu rengi",
     language: "Dil",
